@@ -80,7 +80,7 @@
                                         <span class="suggestion-tag" data-name="{{ member }}">{{ member }}</span>
                                         {% endfor %}
                                         {% if not recent_members %}
-                                        <span class="text-muted">No recent members yet</span>
+                                        <span class="no-recent-members">No recent members yet</span>
                                         {% endif %}
                                     </div>
                                 </div>
@@ -138,10 +138,110 @@
 </div>
 
 <style>
-/* Add these new styles */
+/* Enhanced Styles for Create Group Page */
+.header-icon {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+    color: white;
+    font-size: 2rem;
+}
+
+.gradient-text {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.create-group-card {
+    background: white;
+    border-radius: 20px;
+    padding: 40px;
+    box-shadow: 0 15px 50px rgba(0,0,0,0.1);
+    border: 1px solid #f0f0f0;
+    margin-bottom: 30px;
+}
+
+.form-section {
+    margin-bottom: 40px;
+    padding-bottom: 30px;
+    border-bottom: 1px solid #f8f9fa;
+}
+
+.form-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.section-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 25px;
+}
+
+.section-icon {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    margin-right: 15px;
+}
+
+.section-header h5 {
+    margin: 0;
+    color: #2c3e50;
+    font-weight: 600;
+}
+
+/* Enhanced Form Controls */
+.form-group-enhanced {
+    margin-bottom: 25px;
+}
+
+.form-label-enhanced {
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 8px;
+    display: block;
+    font-size: 1rem;
+}
+
+.input-group-enhanced {
+    position: relative;
+    width: 100%;
+}
+
+.form-control-enhanced {
+    width: 100%;
+    border: 2px solid #e9ecef;
+    border-radius: 12px;
+    padding: 12px 50px 12px 15px;
+    font-size: 16px;
+    transition: all 0.3s ease;
+    background: #fafbfc;
+    font-family: inherit;
+}
+
+.form-control-enhanced:focus {
+    border-color: #667eea;
+    background: white;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    outline: none;
+}
+
 .input-icon-btn {
     position: absolute;
-    right: 10px;
+    right: 8px;
     top: 50%;
     transform: translateY(-50%);
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -155,10 +255,24 @@
     justify-content: center;
     cursor: pointer;
     transition: all 0.3s ease;
+    font-size: 14px;
 }
 
 .input-icon-btn:hover {
     transform: translateY(-50%) scale(1.1);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.form-hint {
+    font-size: 0.875rem;
+    color: #6c757d;
+    margin-top: 6px;
+    line-height: 1.4;
+}
+
+/* Members Input Styling */
+.members-input-container {
+    margin-bottom: 20px;
 }
 
 .quick-add-suggestions {
@@ -166,7 +280,8 @@
     padding-left: 15px;
     background: #f8f9fa;
     border-radius: 0 8px 8px 0;
-    padding: 10px 15px;
+    padding: 12px 15px;
+    margin-top: 10px;
 }
 
 .suggestion-label {
@@ -175,6 +290,270 @@
     font-size: 0.9rem;
     display: block;
     margin-bottom: 8px;
+}
+
+.suggestion-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.suggestion-tag {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 16px;
+    padding: 6px 12px;
+    font-size: 0.875rem;
+    color: #495057;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-weight: 500;
+}
+
+.suggestion-tag:hover {
+    background: #667eea;
+    color: white;
+    border-color: #667eea;
+    transform: translateY(-1px);
+}
+
+.no-recent-members {
+    font-size: 0.875rem;
+    color: #6c757d;
+    font-style: italic;
+}
+
+/* Members Display Area */
+.members-display-area {
+    border: 2px dashed #e9ecef;
+    border-radius: 12px;
+    padding: 20px;
+    background: #fafbfc;
+    min-height: 120px;
+    transition: all 0.3s ease;
+}
+
+.members-display-area.has-members {
+    border-style: solid;
+    border-color: #667eea;
+    background: #f8f9ff;
+}
+
+.selected-members {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    min-height: 40px;
+    align-items: flex-start;
+}
+
+.member-tag {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 20px;
+    padding: 8px 15px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+    font-size: 0.875rem;
+    animation: slideIn 0.3s ease;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.member-tag .remove-member {
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: white;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.2s ease;
+    padding: 0;
+}
+
+.member-tag .remove-member:hover {
+    background: rgba(255,255,255,0.3);
+    transform: scale(1.1);
+}
+
+.no-members-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6c757d;
+    gap: 10px;
+    width: 100%;
+    padding: 20px;
+    text-align: center;
+    flex-direction: column;
+}
+
+.no-members-placeholder i {
+    font-size: 2rem;
+    opacity: 0.5;
+    margin-bottom: 8px;
+}
+
+.members-count {
+    text-align: center;
+    margin-top: 15px;
+    font-weight: 600;
+    color: #667eea;
+    font-size: 0.9rem;
+}
+
+/* Buttons */
+.btn-primary-enhanced {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    border-radius: 12px;
+    padding: 15px 30px;
+    font-weight: 600;
+    font-size: 16px;
+    transition: all 0.3s ease;
+    color: white;
+}
+
+.btn-primary-enhanced:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+    color: white;
+}
+
+.btn-primary-enhanced:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+.btn-secondary-enhanced {
+    background: #f8f9fa;
+    border: 2px solid #e9ecef;
+    color: #6c757d;
+    border-radius: 12px;
+    padding: 15px 30px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    display: block;
+    text-align: center;
+}
+
+.btn-secondary-enhanced:hover {
+    background: #e9ecef;
+    border-color: #dee2e6;
+    color: #6c757d;
+    text-decoration: none;
+}
+
+.form-actions {
+    margin-top: 30px;
+}
+
+/* Animations */
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px) scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.4);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(102, 126, 234, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(102, 126, 234, 0);
+    }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .create-group-card {
+        padding: 25px 20px;
+        margin: 0 -10px;
+        border-radius: 0;
+        box-shadow: none;
+        border: none;
+    }
+    
+    .header-icon {
+        width: 60px;
+        height: 60px;
+        font-size: 1.5rem;
+    }
+    
+    h1.display-5 {
+        font-size: 2rem;
+    }
+    
+    .section-header {
+        flex-direction: column;
+        text-align: center;
+        gap: 10px;
+    }
+    
+    .section-icon {
+        margin-right: 0;
+    }
+    
+    .suggestion-tags {
+        justify-content: center;
+    }
+    
+    .form-control-enhanced {
+        font-size: 16px; /* Prevents zoom on iOS */
+    }
+}
+
+@media (max-width: 576px) {
+    .container {
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+    
+    .create-group-card {
+        padding: 20px 15px;
+    }
+    
+    .member-tag {
+        font-size: 0.8rem;
+        padding: 6px 12px;
+    }
+    
+    .no-members-placeholder {
+        flex-direction: column;
+        text-align: center;
+        padding: 15px;
+    }
+    
+    .no-members-placeholder i {
+        margin-bottom: 5px;
+    }
+}
+
+/* Loading state */
+.loading {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+/* Success state */
+.success-pulse {
+    animation: pulse 2s infinite;
 }
 </style>
 
@@ -187,6 +566,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const submitButton = document.getElementById('submitButton');
     const form = document.getElementById('createGroupForm');
     const addMemberBtn = document.getElementById('addMemberBtn');
+    const membersDisplayArea = document.querySelector('.members-display-area');
     
     let members = [];
     
@@ -216,6 +596,25 @@ document.addEventListener('DOMContentLoaded', function() {
             addMember(name);
             memberInput.value = '';
             memberInput.focus();
+            
+            // Add pulse animation to the button for feedback
+            addMemberBtn.classList.add('success-pulse');
+            setTimeout(() => {
+                addMemberBtn.classList.remove('success-pulse');
+            }, 600);
+        }
+    });
+    
+    // Handle input focus for better UX
+    memberInput.addEventListener('focus', function() {
+        membersDisplayArea.style.borderColor = '#667eea';
+        membersDisplayArea.style.background = '#f8f9ff';
+    });
+    
+    memberInput.addEventListener('blur', function() {
+        if (members.length === 0) {
+            membersDisplayArea.style.borderColor = '#e9ecef';
+            membersDisplayArea.style.background = '#fafbfc';
         }
     });
     
@@ -225,18 +624,25 @@ document.addEventListener('DOMContentLoaded', function() {
             addMember(name);
             memberInput.value = '';
             memberInput.focus();
+            
+            // Add visual feedback
+            addMemberBtn.classList.add('success-pulse');
+            setTimeout(() => {
+                addMemberBtn.classList.remove('success-pulse');
+            }, 600);
         }
     }
     
     // Add member function
     function addMember(name) {
-        if (name && name.length > 0 && !members.includes(name)) {
-            members.push(name);
+        const cleanName = name.replace(/[,]/g, '').trim();
+        if (cleanName && cleanName.length > 0 && !members.includes(cleanName)) {
+            members.push(cleanName);
             updateMembersDisplay();
             updateFormValidation();
             
             // Add to recent members locally
-            addToRecentMembers(name);
+            addToRecentMembers(cleanName);
         }
     }
     
@@ -260,6 +666,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <span>No members added yet. Start typing names above.</span>
                 </div>
             `;
+            membersDisplayArea.classList.remove('has-members');
         } else {
             selectedMembers.innerHTML = members.map(member => `
                 <div class="member-tag">
@@ -270,10 +677,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     </button>
                 </div>
             `).join('');
+            membersDisplayArea.classList.add('has-members');
         }
         
         // Update count
-        membersCount.innerHTML = `<span>${members.length} member${members.length !== 1 ? 's' : ''}</span>`;
+        const memberText = members.length === 1 ? 'member' : 'members';
+        membersCount.innerHTML = `<span>${members.length} ${memberText}</span>`;
     }
     
     // Update form validation
@@ -293,16 +702,27 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load recent members from API
     function loadRecentMembers() {
         fetch('/api/recent_members')
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
             .then(recentMembers => {
                 const recentContainer = document.getElementById('recentMembers');
-                if (recentMembers.length > 0) {
+                if (recentMembers && recentMembers.length > 0) {
                     recentContainer.innerHTML = recentMembers.map(member => 
                         `<span class="suggestion-tag" data-name="${member}">${member}</span>`
                     ).join('');
+                } else {
+                    recentContainer.innerHTML = '<span class="no-recent-members">No recent members yet</span>';
                 }
             })
-            .catch(error => console.error('Error loading recent members:', error));
+            .catch(error => {
+                console.error('Error loading recent members:', error);
+                const recentContainer = document.getElementById('recentMembers');
+                recentContainer.innerHTML = '<span class="no-recent-members">Unable to load recent members</span>';
+            });
     }
     
     // Add to recent members locally
@@ -314,19 +734,24 @@ document.addEventListener('DOMContentLoaded', function() {
         // Remove if already exists
         if (existingNames.includes(name)) {
             const existingTag = existingTags.find(tag => tag.getAttribute('data-name') === name);
-            existingTag.remove();
+            if (existingTag) {
+                existingTag.remove();
+            }
         }
         
-        // Add to beginning
-        const newTag = document.createElement('span');
-        newTag.className = 'suggestion-tag';
-        newTag.setAttribute('data-name', name);
-        newTag.textContent = name;
-        recentContainer.insertBefore(newTag, recentContainer.firstChild);
+        // Add to beginning if we have space
+        if (existingTags.length < 8) {
+            const newTag = document.createElement('span');
+            newTag.className = 'suggestion-tag';
+            newTag.setAttribute('data-name', name);
+            newTag.textContent = name;
+            recentContainer.insertBefore(newTag, recentContainer.firstChild);
+        }
         
-        // Limit to 8 recent members
-        if (existingTags.length >= 8) {
-            recentContainer.lastChild.remove();
+        // Remove "no recent members" text if present
+        const noRecentText = recentContainer.querySelector('.no-recent-members');
+        if (noRecentText) {
+            noRecentText.remove();
         }
     }
     
@@ -345,6 +770,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Add loading state
         submitButton.disabled = true;
         submitButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Creating Group...';
+        form.classList.add('loading');
     });
     
     // Make removeMember function global for onclick
