@@ -1,96 +1,63 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-8">
-        <h2>Add Expense - {{ group.name }}</h2>
-        <form method="POST">
-            <div class="mb-3">
-                <label for="description" class="form-label">Description</label>
-                <input type="text" class="form-control" id="description" name="description" required 
-                       placeholder="e.g., Lunch at Italian Restaurant">
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="text-center mb-5">
+                <h1 class="display-5 fw-bold gradient-text mb-3">Add Expense</h1>
+                <p class="lead text-muted">Add a new expense for {{ group.name }}</p>
             </div>
-            
-            <div class="mb-3">
-                <label for="amount" class="form-label">Amount ($)</label>
-                <input type="number" class="form-control" id="amount" name="amount" step="0.01" min="0.01" required>
-            </div>
-            
-            <div class="mb-3">
-                <label for="paid_by" class="form-label">Paid By</label>
-                <select class="form-select" id="paid_by" name="paid_by" required>
-                    <option value="">Select who paid</option>
-                    {% for member in group.members %}
-                    <option value="{{ member }}">{{ member }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            
-            <div class="mb-3">
-                <label class="form-label">Split Type</label>
-                <div>
-                    <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="radio" name="split_type" id="split_equal" value="equal" checked>
-                        <label class="form-check-label" for="split_equal">Equal Split</label>
+
+            <div class="create-group-card">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <input type="text" class="form-control" id="description" name="description" required 
+                               placeholder="e.g., Lunch at Restaurant">
                     </div>
-                    <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="radio" name="split_type" id="split_custom" value="custom">
-                        <label class="form-check-label" for="split_custom">Custom Split</label>
+
+                    <div class="mb-3">
+                        <label for="base_amount" class="form-label">Base Amount ($)</label>
+                        <input type="number" class="form-control" id="base_amount" name="base_amount" 
+                               step="0.01" min="0.01" required>
                     </div>
-                </div>
+
+                    <div class="mb-3">
+                        <label for="paid_by" class="form-label">Paid By</label>
+                        <select class="form-select" id="paid_by" name="paid_by" required>
+                            <option value="">Select who paid</option>
+                            {% for member in group.members %}
+                            <option value="{{ member }}">{{ member }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Split Type</label>
+                        <div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="split_type" id="split_equal" value="equal" checked>
+                                <label class="form-check-label" for="split_equal">Equal Split</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="split_type" id="split_custom" value="custom">
+                                <label class="form-check-label" for="split_custom">Custom Split</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-plus me-2"></i>Add Expense
+                        </button>
+                        <a href="{{ url_for('group_detail', group_id=group.id) }}" class="btn btn-secondary w-100 mt-2">
+                            <i class="fas fa-arrow-left me-2"></i>Cancel
+                        </a>
+                    </div>
+                </form>
             </div>
-            
-            <div id="custom-split-section" style="display: none;">
-                <h5>Custom Shares</h5>
-                {% for member in group.members %}
-                <div class="mb-2">
-                    <label for="share_{{ member }}" class="form-label">{{ member }}'s share</label>
-                    <input type="number" class="form-control share-input" id="share_{{ member }}" 
-                           name="share_{{ member }}" step="0.01" min="0" placeholder="0.00">
-                </div>
-                {% endfor %}
-            </div>
-            
-            <button type="submit" class="btn btn-primary">Add Expense</button>
-            <a href="{{ url_for('group_detail', group_id=group.id) }}" class="btn btn-secondary">Cancel</a>
-        </form>
+        </div>
     </div>
 </div>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const equalRadio = document.getElementById('split_equal');
-    const customRadio = document.getElementById('split_custom');
-    const customSection = document.getElementById('custom-split-section');
-    const amountInput = document.getElementById('amount');
-    
-    function toggleSplitType() {
-        if (customRadio.checked) {
-            customSection.style.display = 'block';
-        } else {
-            customSection.style.display = 'none';
-        }
-    }
-    
-    function calculateEqualShares() {
-        if (equalRadio.checked) {
-            const shareInputs = document.querySelectorAll('.share-input');
-            const totalMembers = shareInputs.length;
-            const amount = parseFloat(amountInput.value) || 0;
-            const share = amount / totalMembers;
-            
-            shareInputs.forEach(input => {
-                input.value = share.toFixed(2);
-            });
-        }
-    }
-    
-    equalRadio.addEventListener('change', toggleSplitType);
-    customRadio.addEventListener('change', toggleSplitType);
-    amountInput.addEventListener('input', calculateEqualShares);
-    
-    // Initialize
-    toggleSplitType();
-});
-</script>
 {% endblock %}
