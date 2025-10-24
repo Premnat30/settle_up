@@ -21,7 +21,7 @@
                 <select class="form-select" id="paid_by" name="paid_by" required>
                     <option value="">Select who paid</option>
                     {% for member in group.members %}
-                    <option value="{{ member.id }}">{{ member.name }}</option>
+                    <option value="{{ member }}">{{ member }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -44,9 +44,9 @@
                 <h5>Custom Shares</h5>
                 {% for member in group.members %}
                 <div class="mb-2">
-                    <label for="share_{{ member.id }}" class="form-label">{{ member.name }}'s share</label>
-                    <input type="number" class="form-control share-input" id="share_{{ member.id }}" 
-                           name="share_{{ member.id }}" step="0.01" min="0" placeholder="0.00">
+                    <label for="share_{{ member }}" class="form-label">{{ member }}'s share</label>
+                    <input type="number" class="form-control share-input" id="share_{{ member }}" 
+                           name="share_{{ member }}" step="0.01" min="0" placeholder="0.00">
                 </div>
                 {% endfor %}
             </div>
@@ -62,6 +62,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const equalRadio = document.getElementById('split_equal');
     const customRadio = document.getElementById('split_custom');
     const customSection = document.getElementById('custom-split-section');
+    const amountInput = document.getElementById('amount');
     
     function toggleSplitType() {
         if (customRadio.checked) {
@@ -71,8 +72,25 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    function calculateEqualShares() {
+        if (equalRadio.checked) {
+            const shareInputs = document.querySelectorAll('.share-input');
+            const totalMembers = shareInputs.length;
+            const amount = parseFloat(amountInput.value) || 0;
+            const share = amount / totalMembers;
+            
+            shareInputs.forEach(input => {
+                input.value = share.toFixed(2);
+            });
+        }
+    }
+    
     equalRadio.addEventListener('change', toggleSplitType);
     customRadio.addEventListener('change', toggleSplitType);
+    amountInput.addEventListener('input', calculateEqualShares);
+    
+    // Initialize
+    toggleSplitType();
 });
 </script>
 {% endblock %}
