@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <h2>Create New Group</h2>
+        <form method="POST">
+            <div class="mb-3">
+                <label for="group_name" class="form-label">Group Name</label>
+                <input type="text" class="form-control" id="group_name" name="group_name" required 
+                       placeholder="e.g., Saturday Lunch Crew">
+            </div>
+            <div class="mb-3">
+                <label for="members" class="form-label">Group Members</label>
+                <textarea class="form-control" id="members" name="members" rows="3" required 
+                          placeholder="Enter member names separated by commas&#10;Example: Alice, Bob, Charlie, David, Eve"></textarea>
+                <div class="form-text">Enter each friend's name separated by commas</div>
+            </div>
+            <button type="submit" class="btn btn-primary">Create Group</button>
+            <a href="{{ url_for('index') }}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <h2>Add Expense - {{ group.name }}</h2>
+        <form method="POST">
+            <div class="mb-3">
+                <label for="description" class="form-label">Description</label>
+                <input type="text" class="form-control" id="description" name="description" required 
+                       placeholder="e.g., Lunch at Italian Restaurant">
+            </div>
+            
+            <div class="mb-3">
+                <label for="amount" class="form-label">Amount ($)</label>
+                <input type="number" class="form-control" id="amount" name="amount" step="0.01" min="0.01" required>
+            </div>
+            
+            <div class="mb-3">
+                <label for="paid_by" class="form-label">Paid By</label>
+                <select class="form-select" id="paid_by" name="paid_by" required>
+                    <option value="">Select who paid</option>
+                    {% for member in group.members %}
+                    <option value="{{ member.id }}">{{ member.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">Split Type</label>
+                <div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="split_type" id="split_equal" value="equal" checked>
+                        <label class="form-check-label" for="split_equal">Equal Split</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="split_type" id="split_custom" value="custom">
+                        <label class="form-check-label" for="split_custom">Custom Split</label>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="custom-split-section" style="display: none;">
+                <h5>Custom Shares</h5>
+                {% for member in group.members %}
+                <div class="mb-2">
+                    <label for="share_{{ member.id }}" class="form-label">{{ member.name }}'s share</label>
+                    <input type="number" class="form-control share-input" id="share_{{ member.id }}" 
+                           name="share_{{ member.id }}" step="0.01" min="0" placeholder="0.00">
+                </div>
+                {% endfor %}
+            </div>
+            
+            <button type="submit" class="btn btn-primary">Add Expense</button>
+            <a href="{{ url_for('group_detail', group_id=group.id) }}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const equalRadio = document.getElementById('split_equal');
+    const customRadio = document.getElementById('split_custom');
+    const customSection = document.getElementById('custom-split-section');
+    
+    function toggleSplitType() {
+        if (customRadio.checked) {
+            customSection.style.display = 'block';
+        } else {
+            customSection.style.display = 'none';
+        }
+    }
+    
+    equalRadio.addEventListener('change', toggleSplitType);
+    customRadio.addEventListener('change', toggleSplitType);
+});
+</script>
+{% endblock %}

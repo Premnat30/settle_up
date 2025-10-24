@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <h2>Settle Up - {{ group.name }}</h2>
+        
+        {% if settlements %}
+        <div class="card mt-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">Settlement Plan</h5>
+            </div>
+            <div class="card-body">
+                <p>To settle all debts with minimum transactions:</p>
+                <ul class="list-group">
+                    {% for settlement in settlements %}
+                    <li class="list-group-item">
+                        <strong>{{ settlement.from }}</strong> should pay <strong>${{ "%.2f"|format(settlement.amount) }}</strong> to <strong>{{ settlement.to }}</strong>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        {% else %}
+        <div class="alert alert-info mt-4">
+            <h5>All settled up! 🎉</h5>
+            <p>No payments needed. Everyone is balanced.</p>
+        </div>
+        {% endif %}
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0">Current Balances</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for member_id, balance in balances.items() %}
+                    <div class="col-md-6 mb-2">
+                        <div class="d-flex justify-content-between">
+                            <span>{{ member_names[member_id] }}</span>
+                            <span class="{% if balance > 0 %}text-success{% elif balance < 0 %}text-danger{% endif %}">
+                                ${{ "%.2f"|format(balance) }}
+                                {% if balance > 0 %}(owed){% elif balance < 0 %}(owes){% endif %}
+                            </span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-4">
+            <a href="{{ url_for('group_detail', group_id=group.id) }}" class="btn btn-secondary">Back to Group</a>
+            <a href="{{ url_for('add_expense', group_id=group.id) }}" class="btn btn-primary">Add Another Expense</a>
+        </div>
+    </div>
+</div>
+{% endblock %}{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <h2>Settle Up - {{ group.name }}</h2>
+        
+        {% if settlements %}
+        <div class="card mt-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">Settlement Plan</h5>
+            </div>
+            <div class="card-body">
+                <p>To settle all debts with minimum transactions:</p>
+                <ul class="list-group">
+                    {% for settlement in settlements %}
+                    <li class="list-group-item">
+                        <strong>{{ settlement.from }}</strong> should pay <strong>${{ "%.2f"|format(settlement.amount) }}</strong> to <strong>{{ settlement.to }}</strong>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        {% else %}
+        <div class="alert alert-info mt-4">
+            <h5>All settled up! 🎉</h5>
+            <p>No payments needed. Everyone is balanced.</p>
+        </div>
+        {% endif %}
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0">Current Balances</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for member_id, balance in balances.items() %}
+                    <div class="col-md-6 mb-2">
+                        <div class="d-flex justify-content-between">
+                            <span>{{ member_names[member_id] }}</span>
+                            <span class="{% if balance > 0 %}text-success{% elif balance < 0 %}text-danger{% endif %}">
+                                ${{ "%.2f"|format(balance) }}
+                                {% if balance > 0 %}(owed){% elif balance < 0 %}(owes){% endif %}
+                            </span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-4">
+            <a href="{{ url_for('group_detail', group_id=group.id) }}" class="btn btn-secondary">Back to Group</a>
+            <a href="{{ url_for('add_expense', group_id=group.id) }}" class="btn btn-primary">Add Another Expense</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
