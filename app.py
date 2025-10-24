@@ -1,63 +1,46 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
-from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 import os
-import re
+import json
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-12345')
 
-# Database configuration for Render
-database_url = os.environ.get('DATABASE_URL')
+# Simple file-based storage for persistence
+DATA_FILE = 'data.json'
 
-if database_url:
-    # Handle PostgreSQL URL format for newer versions of SQLAlchemy
-    if database_url.startswith('postgres://'):
-        database_url = database_url.replace('postgres://', 'postgresql://', 1)
-    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
-else:
-    # Fallback to SQLite for local development
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///settleup.db'
+def load_data():
+    try:
+        with open(DATA_FILE, 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {'groups': {}, 'expenses': {}, 'next_group_id': 1, 'next_expense_id': 1}
 
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+def save_data(data):
+    with open(DATA_FILE, 'w') as f:
+        json.dump(data, f, default=str)
 
-db = SQLAlchemy(app)
+def get_next_group_id():
+    data = load_data()
+    next_id = data['next_group_id']
+    data['next_group_id'] += 1
+    save_data(data)
+    return next_id
 
-# Models
-class Group(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    members = db.relationship('GroupMember', backref='group', lazy=True, cascade='all, delete-orphan')
-    expenses = db.relationship('Expense', backref='group', lazy=True, cascade='all, delete-orphan')
-
-class GroupMember(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
-    group_id = db.Column(db.Integer, db.ForeignKey('group.id'), nullable=False)
-
-class Expense(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    description = db.Column(db.String(200), nullable=False)
-    amount = db.Column(db.Float, nullable=False)
-    paid_by_id = db.Column(db.Integer, db.ForeignKey('group_member.id'), nullable=False)
-    group_id = db.Column(db.Integer, db.ForeignKey('group.id'), nullable=False)
-    date = db.Column(db.DateTime, default=datetime.utcnow)
-    split_type = db.Column(db.String(20), default='equal')  # equal, custom
-    paid_by = db.relationship('GroupMember')
-
-class ExpenseShare(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    expense_id = db.Column(db.Integer, db.ForeignKey('expense.id'), nullable=False)
-    member_id = db.Column(db.Integer, db.ForeignKey('group_member.id'), nullable=False)
-    share_amount = db.Column(db.Float, nullable=False)
-    expense = db.relationship('Expense', backref=db.backref('shares', lazy=True))
-    member = db.relationship('GroupMember')
+def get_next_expense_id():
+    data = load_data()
+    next_id = data['next_expense_id']
+    data['next_expense_id'] += 1
+    save_data(data)
+    return next_id
 
 # Routes
 @app.route('/')
 def index():
-    groups = Group.query.all()
+    data = load_data()
+    groups = list(data['groups'].values())
+    # Sort groups by creation date (newest first)
+    groups.sort(key=lambda x: x.get('created_at', ''), reverse=True)
     return render_template('index.html', groups=groups)
 
 @app.route('/create_group', methods=['GET', 'POST'])
@@ -70,69 +53,115 @@ def create_group():
             flash('Please add at least 2 members', 'error')
             return redirect(url_for('create_group'))
         
-        group = Group(name=group_name)
-        db.session.add(group)
-        db.session.commit()
+        if len(group_name.strip()) == 0:
+            flash('Please enter a group name', 'error')
+            return redirect(url_for('create_group'))
         
-        for name in member_names:
-            member = GroupMember(name=name, group_id=group.id)
-            db.session.add(member)
+        group_id = get_next_group_id()
+        data = load_data()
         
-        db.session.commit()
-        flash('Group created successfully!', 'success')
-        return redirect(url_for('group_detail', group_id=group.id))
+        group = {
+            'id': group_id,
+            'name': group_name.strip(),
+            'members': member_names,
+            'created_at': datetime.now().isoformat(),
+            'expenses': []
+        }
+        
+        data['groups'][group_id] = group
+        save_data(data)
+        
+        flash(f'Group "{group_name}" created successfully!', 'success')
+        return redirect(url_for('group_detail', group_id=group_id))
     
     return render_template('create_group.html')
 
 @app.route('/group/<int:group_id>')
 def group_detail(group_id):
-    group = Group.query.get_or_404(group_id)
-    expenses = Expense.query.filter_by(group_id=group_id).order_by(Expense.date.desc()).all()
-    return render_template('group_detail.html', group=group, expenses=expenses)
+    data = load_data()
+    group = data['groups'].get(group_id)
+    
+    if not group:
+        flash('Group not found', 'error')
+        return redirect(url_for('index'))
+    
+    # Get expenses for this group
+    group_expenses = []
+    for exp_id, expense in data['expenses'].items():
+        if expense['group_id'] == group_id:
+            # Convert date string back to datetime for display
+            expense['date_display'] = datetime.fromisoformat(expense['date']).strftime('%Y-%m-%d %H:%M')
+            group_expenses.append(expense)
+    
+    # Sort expenses by date (newest first)
+    group_expenses.sort(key=lambda x: x['date'], reverse=True)
+    
+    # Calculate total spent
+    total_spent = sum(expense['amount'] for expense in group_expenses)
+    
+    return render_template('group_detail.html', 
+                         group=group, 
+                         expenses=group_expenses,
+                         total_spent=total_spent)
 
 @app.route('/group/<int:group_id>/add_expense', methods=['GET', 'POST'])
 def add_expense(group_id):
-    group = Group.query.get_or_404(group_id)
+    data = load_data()
+    group = data['groups'].get(group_id)
+    
+    if not group:
+        flash('Group not found', 'error')
+        return redirect(url_for('index'))
     
     if request.method == 'POST':
-        description = request.form['description']
+        description = request.form['description'].strip()
         amount = float(request.form['amount'])
-        paid_by_id = int(request.form['paid_by'])
+        paid_by = request.form['paid_by']
         split_type = request.form['split_type']
         
-        expense = Expense(
-            description=description,
-            amount=amount,
-            paid_by_id=paid_by_id,
-            group_id=group_id,
-            split_type=split_type
-        )
-        db.session.add(expense)
-        db.session.commit()
+        if not description:
+            flash('Please enter a description', 'error')
+            return redirect(url_for('add_expense', group_id=group_id))
         
-        # Create expense shares
+        if amount <= 0:
+            flash('Amount must be greater than 0', 'error')
+            return redirect(url_for('add_expense', group_id=group_id))
+        
+        expense_id = get_next_expense_id()
+        
+        expense = {
+            'id': expense_id,
+            'description': description,
+            'amount': amount,
+            'paid_by': paid_by,
+            'group_id': group_id,
+            'split_type': split_type,
+            'date': datetime.now().isoformat(),
+            'shares': {}
+        }
+        
+        # Calculate shares
         if split_type == 'equal':
-            share_amount = amount / len(group.members)
-            for member in group.members:
-                share = ExpenseShare(
-                    expense_id=expense.id,
-                    member_id=member.id,
-                    share_amount=share_amount
-                )
-                db.session.add(share)
+            share_amount = round(amount / len(group['members']), 2)
+            for member in group['members']:
+                expense['shares'][member] = share_amount
         else:
             # Custom split
-            for member in group.members:
-                share_amount = float(request.form.get(f'share_{member.id}', 0))
-                if share_amount > 0:
-                    share = ExpenseShare(
-                        expense_id=expense.id,
-                        member_id=member.id,
-                        share_amount=share_amount
-                    )
-                    db.session.add(share)
+            total_custom = 0
+            for member in group['members']:
+                share_amount = float(request.form.get(f'share_{member}', 0))
+                expense['shares'][member] = share_amount
+                total_custom += share_amount
+            
+            # Validate custom split totals
+            if abs(total_custom - amount) > 0.01:
+                flash(f'Custom shares (${total_custom:.2f}) must equal total amount (${amount:.2f})', 'error')
+                return redirect(url_for('add_expense', group_id=group_id))
         
-        db.session.commit()
+        data['expenses'][expense_id] = expense
+        group['expenses'].append(expense_id)
+        save_data(data)
+        
         flash('Expense added successfully!', 'success')
         return redirect(url_for('group_detail', group_id=group_id))
     
@@ -140,59 +169,106 @@ def add_expense(group_id):
 
 @app.route('/group/<int:group_id>/settle')
 def settle_up(group_id):
-    group = Group.query.get_or_404(group_id)
+    data = load_data()
+    group = data['groups'].get(group_id)
+    
+    if not group:
+        flash('Group not found', 'error')
+        return redirect(url_for('index'))
     
     # Calculate balances for each member
-    balances = {member.id: 0.0 for member in group.members}
-    member_names = {member.id: member.name for member in group.members}
+    balances = {member: 0.0 for member in group['members']}
+    
+    # Get all expenses for this group
+    group_expenses = []
+    for exp_id in group.get('expenses', []):
+        if str(exp_id) in data['expenses']:
+            group_expenses.append(data['expenses'][str(exp_id)])
     
     # Calculate net balance for each member
-    for expense in group.expenses:
+    for expense in group_expenses:
         # The payer gets positive amount (they are owed money)
-        balances[expense.paid_by_id] += expense.amount
+        balances[expense['paid_by']] += expense['amount']
         
         # Participants get negative amounts (they owe money)
-        for share in expense.shares:
-            balances[share.member_id] -= share.share_amount
+        for member, share in expense['shares'].items():
+            balances[member] -= share
+    
+    # Round balances to avoid floating point issues
+    balances = {member: round(balance, 2) for member, balance in balances.items()}
     
     # Simplify debts
-    settlements = simplify_debts(balances, member_names)
+    settlements = simplify_debts(balances)
     
-    return render_template('settle_up.html', group=group, settlements=settlements, balances=balances, member_names=member_names)
+    return render_template('settle_up.html', 
+                         group=group, 
+                         settlements=settlements, 
+                         balances=balances,
+                         total_expenses=len(group_expenses))
 
-def simplify_debts(balances, member_names):
+@app.route('/group/<int:group_id>/delete', methods=['POST'])
+def delete_group(group_id):
+    data = load_data()
+    
+    if str(group_id) in data['groups']:
+        group_name = data['groups'][str(group_id)]['name']
+        
+        # Remove all expenses for this group
+        expenses_to_delete = []
+        for exp_id, expense in data['expenses'].items():
+            if expense['group_id'] == group_id:
+                expenses_to_delete.append(exp_id)
+        
+        for exp_id in expenses_to_delete:
+            del data['expenses'][exp_id]
+        
+        # Remove the group
+        del data['groups'][str(group_id)]
+        save_data(data)
+        
+        flash(f'Group "{group_name}" deleted successfully!', 'success')
+    else:
+        flash('Group not found', 'error')
+    
+    return redirect(url_for('index'))
+
+def simplify_debts(balances):
     """Simplify debts using minimum transactions"""
     creditors = []
     debtors = []
     
     # Separate creditors and debtors
-    for member_id, balance in balances.items():
+    for member, balance in balances.items():
         if balance > 0.01:  # Creditors (using epsilon for float comparison)
-            creditors.append((member_id, balance))
+            creditors.append((member, balance))
         elif balance < -0.01:  # Debtors
-            debtors.append((member_id, -balance))
+            debtors.append((member, -balance))
     
     settlements = []
     
+    # Sort by amount (largest first for better optimization)
+    creditors.sort(key=lambda x: x[1], reverse=True)
+    debtors.sort(key=lambda x: x[1], reverse=True)
+    
     # Settle debts
     while creditors and debtors:
-        creditor_id, credit_amt = creditors[0]
-        debtor_id, debt_amt = debtors[0]
+        creditor, credit_amt = creditors[0]
+        debtor, debt_amt = debtors[0]
         
         settlement_amt = min(credit_amt, debt_amt)
         
         settlements.append({
-            'from': member_names[debtor_id],
-            'to': member_names[creditor_id],
+            'from': debtor,
+            'to': creditor,
             'amount': round(settlement_amt, 2)
         })
         
         # Update amounts
         if credit_amt > debt_amt:
-            creditors[0] = (creditor_id, credit_amt - debt_amt)
+            creditors[0] = (creditor, credit_amt - debt_amt)
             debtors.pop(0)
         elif debt_amt > credit_amt:
-            debtors[0] = (debtor_id, debt_amt - credit_amt)
+            debtors[0] = (debtor, debt_amt - credit_amt)
             creditors.pop(0)
         else:
             creditors.pop(0)
@@ -203,28 +279,39 @@ def simplify_debts(balances, member_names):
 # API endpoints
 @app.route('/api/group/<int:group_id>/balances')
 def get_balances(group_id):
-    group = Group.query.get_or_404(group_id)
-    balances = {member.id: 0.0 for member in group.members}
-    member_names = {member.id: member.name for member in group.members}
+    data = load_data()
+    group = data['groups'].get(group_id)
     
-    for expense in group.expenses:
-        balances[expense.paid_by_id] += expense.amount
-        for share in expense.shares:
-            balances[share.member_id] -= share.share_amount
+    if not group:
+        return jsonify({'error': 'Group not found'}), 404
+    
+    balances = {member: 0.0 for member in group['members']}
+    
+    # Get all expenses for this group
+    group_expenses = []
+    for exp_id in group.get('expenses', []):
+        if str(exp_id) in data['expenses']:
+            group_expenses.append(data['expenses'][str(exp_id)])
+    
+    for expense in group_expenses:
+        balances[expense['paid_by']] += expense['amount']
+        for member, share in expense['shares'].items():
+            balances[member] -= share
+    
+    balances = {member: round(balance, 2) for member, balance in balances.items()}
     
     return jsonify({
-        'balances': {member_names[k]: round(v, 2) for k, v in balances.items()},
-        'settlements': simplify_debts(balances, member_names)
+        'balances': balances,
+        'settlements': simplify_debts(balances)
     })
 
-# Initialize database
-@app.before_first_request
-def create_tables():
-    try:
-        db.create_all()
-        print("Database tables created successfully!")
-    except Exception as e:
-        print(f"Error creating tables: {e}")
+@app.route('/clear_data')
+def clear_data():
+    """Route to clear all data (for testing)"""
+    data = {'groups': {}, 'expenses': {}, 'next_group_id': 1, 'next_expense_id': 1}
+    save_data(data)
+    flash('All data cleared!', 'success')
+    return redirect(url_for('index'))
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
