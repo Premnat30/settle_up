@@ -2,14 +2,21 @@ from flask import Flask, render_template, request, redirect, url_for, flash, jso
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 import os
+import re
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-12345')
 
 # Database configuration for Render
-if os.environ.get('DATABASE_URL'):
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL').replace('postgres://', 'postgresql://')
+database_url = os.environ.get('DATABASE_URL')
+
+if database_url:
+    # Handle PostgreSQL URL format for newer versions of SQLAlchemy
+    if database_url.startswith('postgres://'):
+        database_url = database_url.replace('postgres://', 'postgresql://', 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 else:
+    # Fallback to SQLite for local development
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///settleup.db'
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -114,7 +121,7 @@ def add_expense(group_id):
                 )
                 db.session.add(share)
         else:
-            # Custom split - you can extend this for itemized splits
+            # Custom split
             for member in group.members:
                 share_amount = float(request.form.get(f'share_{member.id}', 0))
                 if share_amount > 0:
@@ -213,7 +220,12 @@ def get_balances(group_id):
 # Initialize database
 @app.before_first_request
 def create_tables():
-    db.create_all()
+    try:
+        db.create_all()
+        print("Database tables created successfully!")
+    except Exception as e:
+        print(f"Error creating tables: {e}")
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
