@@ -64,23 +64,38 @@
                                     <input type="text" 
                                            class="form-control-enhanced" 
                                            id="memberInput"
-                                           placeholder="Enter member name and press Enter or comma"
+                                           placeholder="Enter member name and press Enter, comma, or click +"
                                            autocomplete="off">
-                                    <div class="input-icon">
+                                    <button type="button" class="input-icon-btn" id="addMemberBtn">
                                         <i class="fas fa-plus"></i>
-                                    </div>
+                                    </button>
                                 </div>
                                 <input type="hidden" id="members" name="members" required>
                                 
-                                <!-- Quick Add Suggestions -->
-                                <div class="quick-add-suggestions">
-                                    <span class="suggestion-label">Quick add:</span>
-                                    <div class="suggestion-tags">
+                                <!-- Dynamic Quick Add Suggestions -->
+                                <div class="quick-add-suggestions mt-3">
+                                    <span class="suggestion-label">Recently used:</span>
+                                    <div class="suggestion-tags" id="recentMembers">
+                                        {% for member in recent_members %}
+                                        <span class="suggestion-tag" data-name="{{ member }}">{{ member }}</span>
+                                        {% endfor %}
+                                        {% if not recent_members %}
+                                        <span class="text-muted">No recent members yet</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+
+                                <!-- Common Names Suggestions -->
+                                <div class="quick-add-suggestions mt-2">
+                                    <span class="suggestion-label">Common names:</span>
+                                    <div class="suggestion-tags" id="commonMembers">
                                         <span class="suggestion-tag" data-name="Alice">Alice</span>
                                         <span class="suggestion-tag" data-name="Bob">Bob</span>
                                         <span class="suggestion-tag" data-name="Charlie">Charlie</span>
                                         <span class="suggestion-tag" data-name="David">David</span>
                                         <span class="suggestion-tag" data-name="Eve">Eve</span>
+                                        <span class="suggestion-tag" data-name="Frank">Frank</span>
+                                        <span class="suggestion-tag" data-name="Grace">Grace</span>
                                     </div>
                                 </div>
                             </div>
@@ -100,7 +115,7 @@
 
                             <div class="form-hint">
                                 <i class="fas fa-lightbulb me-1"></i>
-                                Type names and press Enter, or use commas to separate multiple names
+                                Type names and press Enter, comma, or click the + button to add members
                             </div>
                         </div>
                     </div>
@@ -118,340 +133,48 @@
                     </div>
                 </form>
             </div>
-
-            <!-- Features Preview -->
-            <div class="features-preview mt-5">
-                <h5 class="text-center mb-4">What you'll get with your new group:</h5>
-                <div class="row">
-                    <div class="col-md-4 text-center">
-                        <div class="feature-preview-item">
-                            <i class="fas fa-receipt"></i>
-                            <h6>Easy Expense Tracking</h6>
-                            <p class="small text-muted">Add expenses in seconds</p>
-                        </div>
-                    </div>
-                    <div class="col-md-4 text-center">
-                        <div class="feature-preview-item">
-                            <i class="fas fa-calculator"></i>
-                            <h6>Smart Splitting</h6>
-                            <p class="small text-muted">Equal or custom splits</p>
-                        </div>
-                    </div>
-                    <div class="col-md-4 text-center">
-                        <div class="feature-preview-item">
-                            <i class="fas fa-handshake"></i>
-                            <h6>Auto Settlement</h6>
-                            <p class="small text-muted">Minimize transactions</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
 </div>
 
 <style>
-/* Enhanced Styles for Create Group Page */
-.header-icon {
-    width: 80px;
-    height: 80px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto 20px;
-    color: white;
-    font-size: 2rem;
-}
-
-.gradient-text {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-
-.create-group-card {
-    background: white;
-    border-radius: 20px;
-    padding: 40px;
-    box-shadow: 0 15px 50px rgba(0,0,0,0.1);
-    border: 1px solid #f0f0f0;
-}
-
-.form-section {
-    margin-bottom: 40px;
-    padding-bottom: 30px;
-    border-bottom: 1px solid #f8f9fa;
-}
-
-.form-section:last-child {
-    border-bottom: none;
-    margin-bottom: 0;
-}
-
-.section-header {
-    display: flex;
-    align-items: center;
-    margin-bottom: 25px;
-}
-
-.section-icon {
-    width: 40px;
-    height: 40px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    margin-right: 15px;
-}
-
-.section-header h5 {
-    margin: 0;
-    color: #2c3e50;
-    font-weight: 600;
-}
-
-/* Enhanced Form Controls */
-.form-group-enhanced {
-    margin-bottom: 25px;
-}
-
-.form-label-enhanced {
-    font-weight: 600;
-    color: #2c3e50;
-    margin-bottom: 8px;
-    display: block;
-}
-
-.input-group-enhanced {
-    position: relative;
-}
-
-.form-control-enhanced {
-    border: 2px solid #e9ecef;
-    border-radius: 12px;
-    padding: 12px 45px 12px 15px;
-    font-size: 16px;
-    transition: all 0.3s ease;
-    background: #fafbfc;
-}
-
-.form-control-enhanced:focus {
-    border-color: #667eea;
-    background: white;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    outline: none;
-}
-
-.input-icon {
+/* Add these new styles */
+.input-icon-btn {
     position: absolute;
-    right: 15px;
+    right: 10px;
     top: 50%;
     transform: translateY(-50%);
-    color: #6c757d;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    color: white;
+    border-radius: 8px;
+    width: 35px;
+    height: 35px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
 }
 
-.form-hint {
-    font-size: 0.875rem;
-    color: #6c757d;
-    margin-top: 6px;
-}
-
-/* Members Input Styling */
-.members-input-container {
-    margin-bottom: 20px;
+.input-icon-btn:hover {
+    transform: translateY(-50%) scale(1.1);
 }
 
 .quick-add-suggestions {
-    margin-top: 10px;
+    border-left: 3px solid #667eea;
+    padding-left: 15px;
+    background: #f8f9fa;
+    border-radius: 0 8px 8px 0;
+    padding: 10px 15px;
 }
 
 .suggestion-label {
-    font-size: 0.875rem;
-    color: #6c757d;
-    margin-right: 10px;
-}
-
-.suggestion-tags {
-    display: inline-flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
-.suggestion-tag {
-    background: #f8f9fa;
-    border: 1px solid #e9ecef;
-    border-radius: 20px;
-    padding: 4px 12px;
-    font-size: 0.875rem;
+    font-weight: 600;
     color: #495057;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.suggestion-tag:hover {
-    background: #667eea;
-    color: white;
-    border-color: #667eea;
-}
-
-/* Members Display Area */
-.members-display-area {
-    border: 2px dashed #e9ecef;
-    border-radius: 12px;
-    padding: 20px;
-    background: #fafbfc;
-    min-height: 120px;
-}
-
-.selected-members {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    min-height: 40px;
-}
-
-.member-tag {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border-radius: 20px;
-    padding: 8px 15px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-weight: 500;
-    animation: slideIn 0.3s ease;
-}
-
-.member-tag .remove-member {
-    background: rgba(255,255,255,0.2);
-    border: none;
-    color: white;
-    border-radius: 50%;
-    width: 20px;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    font-size: 12px;
-    transition: all 0.2s ease;
-}
-
-.member-tag .remove-member:hover {
-    background: rgba(255,255,255,0.3);
-}
-
-.no-members-placeholder {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #6c757d;
-    gap: 10px;
-    width: 100%;
-    padding: 20px;
-}
-
-.members-count {
-    text-align: center;
-    margin-top: 15px;
-    font-weight: 600;
-    color: #667eea;
-}
-
-/* Buttons */
-.btn-primary-enhanced {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border: none;
-    border-radius: 12px;
-    padding: 15px 30px;
-    font-weight: 600;
-    font-size: 16px;
-    transition: all 0.3s ease;
-}
-
-.btn-primary-enhanced:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
-}
-
-.btn-primary-enhanced:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-    transform: none !important;
-}
-
-.btn-secondary-enhanced {
-    background: #f8f9fa;
-    border: 2px solid #e9ecef;
-    color: #6c757d;
-    border-radius: 12px;
-    padding: 15px 30px;
-    font-weight: 600;
-    transition: all 0.3s ease;
-}
-
-.btn-secondary-enhanced:hover {
-    background: #e9ecef;
-    border-color: #dee2e6;
-}
-
-/* Features Preview */
-.features-preview {
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-    border-radius: 20px;
-    padding: 30px;
-}
-
-.feature-preview-item {
-    padding: 20px;
-}
-
-.feature-preview-item i {
-    font-size: 2rem;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    margin-bottom: 15px;
-}
-
-.feature-preview-item h6 {
-    color: #2c3e50;
-    font-weight: 600;
-}
-
-/* Animations */
-@keyframes slideIn {
-    from {
-        opacity: 0;
-        transform: translateY(-10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-    .create-group-card {
-        padding: 25px;
-        margin: 0 -15px;
-        border-radius: 0;
-    }
-    
-    .header-icon {
-        width: 60px;
-        height: 60px;
-        font-size: 1.5rem;
-    }
-    
-    h1.display-5 {
-        font-size: 2rem;
-    }
+    font-size: 0.9rem;
+    display: block;
+    margin-bottom: 8px;
 }
 </style>
 
@@ -463,29 +186,47 @@ document.addEventListener('DOMContentLoaded', function() {
     const membersCount = document.getElementById('membersCount');
     const submitButton = document.getElementById('submitButton');
     const form = document.getElementById('createGroupForm');
+    const addMemberBtn = document.getElementById('addMemberBtn');
     
     let members = [];
     
     // Initialize display
     updateMembersDisplay();
     
-    // Add member on Enter or comma
+    // Load recent members from API
+    loadRecentMembers();
+    
+    // Add member on Enter, comma, or button click
     memberInput.addEventListener('keydown', function(e) {
         if (e.key === 'Enter' || e.key === ',') {
             e.preventDefault();
-            addMember(memberInput.value.trim());
-            memberInput.value = '';
+            addCurrentMember();
         }
     });
     
-    // Add member from suggestion tags
-    document.querySelectorAll('.suggestion-tag').forEach(tag => {
-        tag.addEventListener('click', function() {
-            const name = this.getAttribute('data-name');
-            addMember(name);
-            memberInput.focus();
-        });
+    // Add member button click
+    addMemberBtn.addEventListener('click', function() {
+        addCurrentMember();
     });
+    
+    // Add member from suggestion tags
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('suggestion-tag')) {
+            const name = e.target.getAttribute('data-name');
+            addMember(name);
+            memberInput.value = '';
+            memberInput.focus();
+        }
+    });
+    
+    function addCurrentMember() {
+        const name = memberInput.value.trim();
+        if (name) {
+            addMember(name);
+            memberInput.value = '';
+            memberInput.focus();
+        }
+    }
     
     // Add member function
     function addMember(name) {
@@ -493,6 +234,9 @@ document.addEventListener('DOMContentLoaded', function() {
             members.push(name);
             updateMembersDisplay();
             updateFormValidation();
+            
+            // Add to recent members locally
+            addToRecentMembers(name);
         }
     }
     
@@ -543,6 +287,46 @@ document.addEventListener('DOMContentLoaded', function() {
             submitButton.innerHTML = `<i class="fas fa-rocket me-2"></i>Create Awesome Group (${members.length} members)`;
         } else {
             submitButton.innerHTML = `<i class="fas fa-rocket me-2"></i>Create Awesome Group`;
+        }
+    }
+    
+    // Load recent members from API
+    function loadRecentMembers() {
+        fetch('/api/recent_members')
+            .then(response => response.json())
+            .then(recentMembers => {
+                const recentContainer = document.getElementById('recentMembers');
+                if (recentMembers.length > 0) {
+                    recentContainer.innerHTML = recentMembers.map(member => 
+                        `<span class="suggestion-tag" data-name="${member}">${member}</span>`
+                    ).join('');
+                }
+            })
+            .catch(error => console.error('Error loading recent members:', error));
+    }
+    
+    // Add to recent members locally
+    function addToRecentMembers(name) {
+        const recentContainer = document.getElementById('recentMembers');
+        const existingTags = Array.from(recentContainer.querySelectorAll('.suggestion-tag'));
+        const existingNames = existingTags.map(tag => tag.getAttribute('data-name'));
+        
+        // Remove if already exists
+        if (existingNames.includes(name)) {
+            const existingTag = existingTags.find(tag => tag.getAttribute('data-name') === name);
+            existingTag.remove();
+        }
+        
+        // Add to beginning
+        const newTag = document.createElement('span');
+        newTag.className = 'suggestion-tag';
+        newTag.setAttribute('data-name', name);
+        newTag.textContent = name;
+        recentContainer.insertBefore(newTag, recentContainer.firstChild);
+        
+        // Limit to 8 recent members
+        if (existingTags.length >= 8) {
+            recentContainer.lastChild.remove();
         }
     }
     
