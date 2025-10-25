@@ -1,477 +1,96 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="container">
-    <div class="row justify-content-center">
-        <div class="col-lg-8">
-            <div class="text-center mb-5">
-                <div class="header-icon">
-                    <i class="fas fa-receipt"></i>
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <h2>Add Expense - {{ group.name }}</h2>
+        <form method="POST">
+            <div class="mb-3">
+                <label for="description" class="form-label">Description</label>
+                <input type="text" class="form-control" id="description" name="description" required 
+                       placeholder="e.g., Lunch at Italian Restaurant">
+            </div>
+            
+            <div class="mb-3">
+                <label for="amount" class="form-label">Amount ($)</label>
+                <input type="number" class="form-control" id="amount" name="amount" step="0.01" min="0.01" required>
+            </div>
+            
+            <div class="mb-3">
+                <label for="paid_by" class="form-label">Paid By</label>
+                <select class="form-select" id="paid_by" name="paid_by" required>
+                    <option value="">Select who paid</option>
+                    {% for member in group.members %}
+                    <option value="{{ member }}">{{ member }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">Split Type</label>
+                <div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="split_type" id="split_equal" value="equal" checked>
+                        <label class="form-check-label" for="split_equal">Equal Split</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="split_type" id="split_custom" value="custom">
+                        <label class="form-check-label" for="split_custom">Custom Split</label>
+                    </div>
                 </div>
-                <h1 class="display-5 fw-bold gradient-text mb-3">Add Expense</h1>
-                <p class="lead text-muted">Add a new expense for {{ group.name }}</p>
             </div>
-
-            <div class="create-group-card">
-                <form method="POST" id="expenseForm">
-                    <!-- Basic Information -->
-                    <div class="form-section">
-                        <div class="section-header">
-                            <div class="section-icon">
-                                <i class="fas fa-info-circle"></i>
-                            </div>
-                            <h5>Basic Information</h5>
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-md-8">
-                                <div class="form-group-enhanced">
-                                    <label for="description" class="form-label-enhanced">
-                                        <i class="fas fa-tag me-2"></i>Description
-                                    </label>
-                                    <input type="text" class="form-control-enhanced" id="description" name="description" 
-                                           required placeholder="e.g., Dinner at Italian Restaurant, Movie Tickets">
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="form-group-enhanced">
-                                    <label for="visit_date" class="form-label-enhanced">
-                                        <i class="fas fa-calendar me-2"></i>Visit Date
-                                    </label>
-                                    <input type="date" class="form-control-enhanced" id="visit_date" name="visit_date" 
-                                           value="{{ today }}">
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="form-group-enhanced">
-                            <label for="paid_by" class="form-label-enhanced">
-                                <i class="fas fa-user me-2"></i>Paid By
-                            </label>
-                            <select class="form-control-enhanced" id="paid_by" name="paid_by" required>
-                                <option value="">Select who paid for this expense</option>
-                                {% for member in group.members %}
-                                <option value="{{ member }}">{{ member }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- Amount Calculation -->
-                    <div class="form-section">
-                        <div class="section-header">
-                            <div class="section-icon">
-                                <i class="fas fa-calculator"></i>
-                            </div>
-                            <h5>Amount Calculation</h5>
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group-enhanced">
-                                    <label for="base_amount" class="form-label-enhanced">Base Amount ($)</label>
-                                    <input type="number" class="form-control-enhanced" id="base_amount" name="base_amount" 
-                                           step="0.01" min="0.01" required placeholder="0.00"
-                                           oninput="calculateTotal()">
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group-enhanced">
-                                    <label for="discount_percent" class="form-label-enhanced">Discount (%)</label>
-                                    <input type="number" class="form-control-enhanced" id="discount_percent" name="discount_percent" 
-                                           step="0.01" min="0" max="100" value="0" placeholder="0"
-                                           oninput="calculateTotal()">
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group-enhanced">
-                                    <label for="service_tax_percent" class="form-label-enhanced">Service Tax (%)</label>
-                                    <input type="number" class="form-control-enhanced" id="service_tax_percent" name="service_tax_percent" 
-                                           step="0.01" min="0" value="0" placeholder="0"
-                                           oninput="calculateTotal()">
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group-enhanced">
-                                    <label for="gst_percent" class="form-label-enhanced">GST (%)</label>
-                                    <input type="number" class="form-control-enhanced" id="gst_percent" name="gst_percent" 
-                                           step="0.01" min="0" value="0" placeholder="0"
-                                           oninput="calculateTotal()">
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Calculation Results -->
-                        <div class="calculation-results mt-4 p-4 bg-light rounded">
-                            <h6 class="mb-3 text-center">
-                                <i class="fas fa-calculator me-2"></i>Amount Breakdown
-                            </h6>
-                            <div class="row text-center mb-3">
-                                <div class="col-4">
-                                    <small class="text-muted d-block">Base Amount</small>
-                                    <div class="fw-bold fs-5" id="baseAmountDisplay">$0.00</div>
-                                </div>
-                                <div class="col-4">
-                                    <small class="text-muted d-block">After Discount</small>
-                                    <div class="fw-bold fs-5" id="afterDiscountDisplay">$0.00</div>
-                                </div>
-                                <div class="col-4">
-                                    <small class="text-muted d-block">Total Amount</small>
-                                    <div class="fw-bold fs-5 text-success" id="totalAmountDisplay">$0.00</div>
-                                </div>
-                            </div>
-                            <div class="row text-center">
-                                <div class="col-3">
-                                    <small class="text-muted d-block">Discount</small>
-                                    <div class="fw-bold text-danger" id="discountDisplay">$0.00</div>
-                                </div>
-                                <div class="col-3">
-                                    <small class="text-muted d-block">Service Tax</small>
-                                    <div class="fw-bold text-info" id="serviceTaxDisplay">$0.00</div>
-                                </div>
-                                <div class="col-3">
-                                    <small class="text-muted d-block">GST</small>
-                                    <div class="fw-bold text-info" id="gstDisplay">$0.00</div>
-                                </div>
-                                <div class="col-3">
-                                    <small class="text-muted d-block">Per Person</small>
-                                    <div class="fw-bold text-warning" id="perPersonDisplay">$0.00</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Split Type -->
-                    <div class="form-section">
-                        <div class="section-header">
-                            <div class="section-icon">
-                                <i class="fas fa-share-alt"></i>
-                            </div>
-                            <h5>Split Configuration</h5>
-                        </div>
-
-                        <div class="form-group-enhanced">
-                            <label class="form-label-enhanced">Split Type</label>
-                            <div class="split-type-selector">
-                                <div class="form-check form-check-inline">
-                                    <input class="form-check-input" type="radio" name="split_type" id="split_equal" 
-                                           value="equal" checked onchange="toggleSplitType()">
-                                    <label class="form-check-label" for="split_equal">
-                                        <i class="fas fa-equals me-1"></i>Equal Split
-                                    </label>
-                                </div>
-                                <div class="form-check form-check-inline">
-                                    <input class="form-check-input" type="radio" name="split_type" id="split_custom" 
-                                           value="custom" onchange="toggleSplitType()">
-                                    <label class="form-check-label" for="split_custom">
-                                        <i class="fas fa-pencil-alt me-1"></i>Custom Split
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Custom Split Section -->
-                        <div id="custom-split-section" style="display: none;">
-                            <div class="custom-split-header mb-3">
-                                <h6>Custom Shares</h6>
-                                <small class="text-muted">Enter individual amounts for each member</small>
-                            </div>
-                            {% for member in group.members %}
-                            <div class="row align-items-center mb-2">
-                                <div class="col-md-6">
-                                    <label class="form-label-enhanced">
-                                        <i class="fas fa-user me-2"></i>{{ member }}
-                                    </label>
-                                </div>
-                                <div class="col-md-6">
-                                    <input type="number" class="form-control-enhanced share-input" 
-                                           name="share_{{ member }}" step="0.01" min="0" 
-                                           value="0" placeholder="0.00"
-                                           oninput="validateCustomSplit()">
-                                </div>
-                            </div>
-                            {% endfor %}
-                            <div class="custom-split-validation mt-3">
-                                <div class="alert alert-warning py-2" id="splitValidation" style="display: none;">
-                                    <i class="fas fa-exclamation-triangle me-2"></i>
-                                    <span id="validationMessage"></span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Action Buttons -->
-                    <div class="form-actions">
-                        <button type="submit" class="btn btn-primary-enhanced w-100 py-3">
-                            <i class="fas fa-plus-circle me-2"></i>Add Expense
-                        </button>
-                        <a href="{{ url_for('group_detail', group_id=group.id) }}" class="btn btn-secondary-enhanced w-100 mt-2">
-                            <i class="fas fa-arrow-left me-2"></i>Back to Group
-                        </a>
-                    </div>
-                </form>
+            
+            <div id="custom-split-section" style="display: none;">
+                <h5>Custom Shares</h5>
+                {% for member in group.members %}
+                <div class="mb-2">
+                    <label for="share_{{ member }}" class="form-label">{{ member }}'s share</label>
+                    <input type="number" class="form-control share-input" id="share_{{ member }}" 
+                           name="share_{{ member }}" step="0.01" min="0" placeholder="0.00">
+                </div>
+                {% endfor %}
             </div>
-        </div>
+            
+            <button type="submit" class="btn btn-primary">Add Expense</button>
+            <a href="{{ url_for('group_detail', group_id=group.id) }}" class="btn btn-secondary">Cancel</a>
+        </form>
     </div>
 </div>
 
-<style>
-.calculation-results {
-    border: 2px solid #e9ecef;
-    background: linear-gradient(135deg, #f8f9ff 0%, #f0f2ff 100%);
-}
-
-.split-type-selector {
-    background: #f8f9fa;
-    padding: 15px;
-    border-radius: 10px;
-}
-
-.custom-split-header {
-    background: #fff3cd;
-    padding: 12px 15px;
-    border-radius: 8px;
-    border-left: 4px solid #ffc107;
-}
-
-.custom-split-validation .alert {
-    margin-bottom: 0;
-    border-radius: 8px;
-}
-
-/* Enhanced form styles from create_group.html */
-.form-section {
-    margin-bottom: 40px;
-    padding-bottom: 30px;
-    border-bottom: 1px solid #f8f9fa;
-}
-
-.form-section:last-child {
-    border-bottom: none;
-    margin-bottom: 0;
-}
-
-.section-header {
-    display: flex;
-    align-items: center;
-    margin-bottom: 25px;
-}
-
-.section-icon {
-    width: 40px;
-    height: 40px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    margin-right: 15px;
-}
-
-.section-header h5 {
-    margin: 0;
-    color: #2c3e50;
-    font-weight: 600;
-}
-
-.form-group-enhanced {
-    margin-bottom: 25px;
-}
-
-.form-label-enhanced {
-    font-weight: 600;
-    color: #2c3e50;
-    margin-bottom: 8px;
-    display: block;
-}
-
-.form-control-enhanced {
-    width: 100%;
-    border: 2px solid #e9ecef;
-    border-radius: 12px;
-    padding: 12px 15px;
-    font-size: 16px;
-    transition: all 0.3s ease;
-    background: #fafbfc;
-}
-
-.form-control-enhanced:focus {
-    border-color: #667eea;
-    background: white;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    outline: none;
-}
-
-.btn-primary-enhanced {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border: none;
-    border-radius: 12px;
-    padding: 15px 30px;
-    font-weight: 600;
-    font-size: 16px;
-    transition: all 0.3s ease;
-    color: white;
-}
-
-.btn-primary-enhanced:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
-}
-
-.btn-secondary-enhanced {
-    background: #f8f9fa;
-    border: 2px solid #e9ecef;
-    color: #6c757d;
-    border-radius: 12px;
-    padding: 15px 30px;
-    font-weight: 600;
-    transition: all 0.3s ease;
-    text-decoration: none;
-    display: block;
-    text-align: center;
-}
-
-.btn-secondary-enhanced:hover {
-    background: #e9ecef;
-    border-color: #dee2e6;
-    color: #6c757d;
-    text-decoration: none;
-}
-
-.header-icon {
-    width: 80px;
-    height: 80px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto 20px;
-    color: white;
-    font-size: 2rem;
-}
-
-.gradient-text {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-}
-
-.create-group-card {
-    background: white;
-    border-radius: 20px;
-    padding: 40px;
-    box-shadow: 0 15px 50px rgba(0,0,0,0.1);
-    border: 1px solid #f0f0f0;
-    margin-bottom: 30px;
-}
-</style>
-
 <script>
-// Set today's date as default for visit date
 document.addEventListener('DOMContentLoaded', function() {
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('visit_date').value = today;
-    calculateTotal();
-});
-
-function calculateTotal() {
-    const baseAmount = parseFloat(document.getElementById('base_amount').value) || 0;
-    const discountPercent = parseFloat(document.getElementById('discount_percent').value) || 0;
-    const serviceTaxPercent = parseFloat(document.getElementById('service_tax_percent').value) || 0;
-    const gstPercent = parseFloat(document.getElementById('gst_percent').value) || 0;
-    const memberCount = {{ group.members|length }};
-    
-    // Calculate amounts
-    const discountAmount = (baseAmount * discountPercent) / 100;
-    const amountAfterDiscount = baseAmount - discountAmount;
-    const serviceTaxAmount = (amountAfterDiscount * serviceTaxPercent) / 100;
-    const gstAmount = (amountAfterDiscount * gstPercent) / 100;
-    const totalAmount = amountAfterDiscount + serviceTaxAmount + gstAmount;
-    const perPersonAmount = totalAmount / memberCount;
-    
-    // Update display
-    document.getElementById('baseAmountDisplay').textContent = `$${baseAmount.toFixed(2)}`;
-    document.getElementById('discountDisplay').textContent = `-$${discountAmount.toFixed(2)}`;
-    document.getElementById('afterDiscountDisplay').textContent = `$${amountAfterDiscount.toFixed(2)}`;
-    document.getElementById('serviceTaxDisplay').textContent = `$${serviceTaxAmount.toFixed(2)}`;
-    document.getElementById('gstDisplay').textContent = `$${gstAmount.toFixed(2)}`;
-    document.getElementById('totalAmountDisplay').textContent = `$${totalAmount.toFixed(2)}`;
-    document.getElementById('perPersonDisplay').textContent = `$${perPersonAmount.toFixed(2)}`;
-    
-    // Update equal shares if equal split is selected
-    if (document.getElementById('split_equal').checked) {
-        document.querySelectorAll('.share-input').forEach(input => {
-            input.value = perPersonAmount.toFixed(2);
-        });
-    }
-    
-    validateCustomSplit();
-}
-
-function toggleSplitType() {
+    const equalRadio = document.getElementById('split_equal');
+    const customRadio = document.getElementById('split_custom');
     const customSection = document.getElementById('custom-split-section');
-    if (document.getElementById('split_custom').checked) {
-        customSection.style.display = 'block';
-    } else {
-        customSection.style.display = 'none';
-        // Reset to equal shares
-        calculateTotal();
-    }
-}
-
-function validateCustomSplit() {
-    if (!document.getElementById('split_custom').checked) return;
+    const amountInput = document.getElementById('amount');
     
-    const totalAmount = parseFloat(document.getElementById('totalAmountDisplay').textContent.replace('$', '')) || 0;
-    const shareInputs = document.querySelectorAll('.share-input');
-    let customTotal = 0;
-    
-    shareInputs.forEach(input => {
-        customTotal += parseFloat(input.value) || 0;
-    });
-    
-    const validationElement = document.getElementById('splitValidation');
-    const messageElement = document.getElementById('validationMessage');
-    
-    if (Math.abs(customTotal - totalAmount) > 0.01) {
-        validationElement.style.display = 'block';
-        messageElement.textContent = `Custom shares total: $${customTotal.toFixed(2)} | Required: $${totalAmount.toFixed(2)} | Difference: $${(customTotal - totalAmount).toFixed(2)}`;
-        validationElement.className = 'alert alert-warning py-2';
-    } else {
-        validationElement.style.display = 'block';
-        messageElement.textContent = 'Custom shares match total amount perfectly!';
-        validationElement.className = 'alert alert-success py-2';
-    }
-}
-
-// Form submission validation
-document.getElementById('expenseForm').addEventListener('submit', function(e) {
-    if (document.getElementById('split_custom').checked) {
-        const totalAmount = parseFloat(document.getElementById('totalAmountDisplay').textContent.replace('$', '')) || 0;
-        const shareInputs = document.querySelectorAll('.share-input');
-        let customTotal = 0;
-        
-        shareInputs.forEach(input => {
-            customTotal += parseFloat(input.value) || 0;
-        });
-        
-        if (Math.abs(customTotal - totalAmount) > 0.01) {
-            e.preventDefault();
-            alert('Custom shares must equal the total amount. Please adjust the shares.');
-            return false;
+    function toggleSplitType() {
+        if (customRadio.checked) {
+            customSection.style.display = 'block';
+        } else {
+            customSection.style.display = 'none';
         }
     }
     
-    // Add loading state
-    const submitButton = this.querySelector('button[type="submit"]');
-    submitButton.disabled = true;
-    submitButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Adding Expense...';
+    function calculateEqualShares() {
+        if (equalRadio.checked) {
+            const shareInputs = document.querySelectorAll('.share-input');
+            const totalMembers = shareInputs.length;
+            const amount = parseFloat(amountInput.value) || 0;
+            const share = amount / totalMembers;
+            
+            shareInputs.forEach(input => {
+                input.value = share.toFixed(2);
+            });
+        }
+    }
+    
+    equalRadio.addEventListener('change', toggleSplitType);
+    customRadio.addEventListener('change', toggleSplitType);
+    amountInput.addEventListener('input', calculateEqualShares);
+    
+    // Initialize
+    toggleSplitType();
 });
 </script>
 {% endblock %}
