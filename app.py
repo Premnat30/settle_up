@@ -285,7 +285,8 @@ def get_recent_members():
 def group_detail(group_id):
     try:
         data = load_data()
-        group = data['groups'].get(str(group_id))
+        group_key = str(group_id)
+        group = data['groups'].get(group_key)
         
         if not group:
             flash('Group not found', 'error')
@@ -303,8 +304,15 @@ def group_detail(group_id):
         
         # Get expenses for this group
         group_expenses = []
-        for exp_id, expense in data.get('expenses', {}).items():
-            if isinstance(expense, dict) and expense.get('group_id') == group_id:
+        print(f"Group expense IDs: {group.get('expenses', [])}")
+        print(f"All expense keys: {list(data.get('expenses', {}).keys())}")
+        
+        for exp_id in group.get('expenses', []):
+            expense_key = str(exp_id)
+            expense = data.get('expenses', {}).get(expense_key)
+            print(f"Looking for expense {exp_id} with key {expense_key}: {expense is not None}")
+            
+            if expense and expense.get('group_id') == group_id:
                 try:
                     # Ensure expense has all required fields
                     if 'date' not in expense:
@@ -333,12 +341,16 @@ def group_detail(group_id):
         # Calculate total spent
         total_spent = sum(expense.get('amount', 0) for expense in group_expenses)
         
+        print(f"Final group expenses count: {len(group_expenses)}")
+        
         return render_template('group_detail.html', 
                              group=group, 
                              expenses=group_expenses,
                              total_spent=total_spent)
     except Exception as e:
         print(f"Error in group_detail: {e}")
+        import traceback
+        traceback.print_exc()
         flash('Error loading group details. Please try again.', 'error')
         return redirect(url_for('index'))
 
@@ -346,7 +358,8 @@ def group_detail(group_id):
 def add_expense(group_id):
     try:
         data = load_data()
-        group = data['groups'].get(str(group_id))
+        group_key = str(group_id)
+        group = data['groups'].get(group_key)
         
         if not group:
             flash('Group not found', 'error')
@@ -384,11 +397,13 @@ def add_expense(group_id):
             gst_amount = (amount_after_discount * gst_percent) / 100
             total_amount = amount_after_discount + service_tax_amount + gst_amount
             
+            # Get a new expense ID and ensure it's unique
             expense_id = get_next_expense_id()
             if expense_id is None:
                 flash('Error creating expense. Please try again.', 'error')
                 return redirect(url_for('add_expense', group_id=group_id))
             
+            # Create the expense object
             expense = {
                 'id': expense_id,
                 'description': description,
@@ -423,13 +438,23 @@ def add_expense(group_id):
                     flash(f'Custom shares (${total_custom:.2f}) must equal total amount (${total_amount:.2f})', 'error')
                     return redirect(url_for('add_expense', group_id=group_id))
             
-            # Save the expense with string key
-            data['expenses'][str(expense_id)] = expense
+            print(f"Creating new expense with ID: {expense_id}")
+            print(f"Current expenses in data: {list(data.get('expenses', {}).keys())}")
             
-            # Add expense to group
+            # Save the expense with string key
+            expense_key = str(expense_id)
+            data['expenses'][expense_key] = expense
+            
+            # Add expense ID to group's expense list
             if 'expenses' not in group:
                 group['expenses'] = []
-            group['expenses'].append(expense_id)
+            
+            # Check if expense_id is already in the list to avoid duplicates
+            if expense_id not in group['expenses']:
+                group['expenses'].append(expense_id)
+            
+            print(f"Group expenses after adding: {group['expenses']}")
+            print(f"All expenses after adding: {list(data['expenses'].keys())}")
             
             if save_data(data):
                 flash('Expense added successfully!', 'success')
@@ -444,6 +469,8 @@ def add_expense(group_id):
         
     except Exception as e:
         print(f"Error in add_expense: {e}")
+        import traceback
+        traceback.print_exc()
         flash(f'Error: Please try again.', 'error')
         return redirect(url_for('group_detail', group_id=group_id))
 
@@ -636,6 +663,34 @@ def debug_data():
             'next_expense_id': data.get('next_expense_id'),
             'recent_members': data.get('recent_members', [])
         })
+    except Exception as e:
+        return jsonify({'error': str(e)})
+    
+@app.route('/debug/expenses')
+def debug_expenses():
+    """Debug route to check expense data"""
+    try:
+        data = load_data()
+        debug_info = {
+            'groups': {},
+            'expenses': {},
+            'next_expense_id': data.get('next_expense_id')
+        }
+        
+        for group_id, group in data.get('groups', {}).items():
+            debug_info['groups'][group_id] = {
+                'name': group.get('name'),
+                'expense_ids': group.get('expenses', [])
+            }
+        
+        for exp_id, expense in data.get('expenses', {}).items():
+            debug_info['expenses'][exp_id] = {
+                'description': expense.get('description'),
+                'group_id': expense.get('group_id'),
+                'amount': expense.get('amount')
+            }
+        
+        return jsonify(debug_info)
     except Exception as e:
         return jsonify({'error': str(e)})
 
