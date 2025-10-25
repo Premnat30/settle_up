@@ -11,30 +11,50 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-12345')
 # Simple file-based storage for persistence
 DATA_FILE = 'data.json'
 
-def get_next_expense_id():
-    data = load_data()
-    
-    # Find the maximum existing expense ID
-    existing_ids = []
-    for exp_id in data.get('expenses', {}).keys():
-        try:
-            existing_ids.append(int(exp_id))
-        except (ValueError, TypeError):
-            continue
-    
-    # If no expenses exist, start from 1, else use max + 1
-    if existing_ids:
-        next_id = max(existing_ids) + 1
-    else:
-        next_id = 1
-    
-    # Update the next_expense_id counter
-    data['next_expense_id'] = next_id + 1
-    
-    if save_data(data):
-        return next_id
-    return None
-
+def load_data():
+    """Load data from file with proper error handling"""
+    try:
+        # Create data file if it doesn't exist
+        if not os.path.exists(DATA_FILE):
+            default_data = {
+                'groups': {},
+                'expenses': {},
+                'next_group_id': 1,
+                'next_expense_id': 1,
+                'recent_members': []
+            }
+            with open(DATA_FILE, 'w') as f:
+                json.dump(default_data, f, indent=2)
+            return default_data
+        
+        with open(DATA_FILE, 'r') as f:
+            data = json.load(f)
+            
+        # Ensure all required keys exist
+        required_keys = ['groups', 'expenses', 'next_group_id', 'next_expense_id', 'recent_members']
+        for key in required_keys:
+            if key not in data:
+                if key == 'groups':
+                    data[key] = {}
+                elif key == 'expenses':
+                    data[key] = {}
+                elif key == 'recent_members':
+                    data[key] = []
+                else:
+                    data[key] = 1
+        
+        return data
+        
+    except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
+        print(f"Error loading data: {e}")
+        # Return default structure if file is corrupted
+        return {
+            'groups': {},
+            'expenses': {},
+            'next_group_id': 1,
+            'next_expense_id': 1,
+            'recent_members': []
+        }
 
 def save_data(data):
     """Save data to file with error handling"""
@@ -56,8 +76,24 @@ def get_next_group_id():
 
 def get_next_expense_id():
     data = load_data()
-    next_id = data['next_expense_id']
-    data['next_expense_id'] += 1
+    
+    # Find the maximum existing expense ID
+    existing_ids = []
+    for exp_id in data.get('expenses', {}).keys():
+        try:
+            existing_ids.append(int(exp_id))
+        except (ValueError, TypeError):
+            continue
+    
+    # If no expenses exist, start from 1, else use max + 1
+    if existing_ids:
+        next_id = max(existing_ids) + 1
+    else:
+        next_id = 1
+    
+    # Update the next_expense_id counter
+    data['next_expense_id'] = next_id + 1
+    
     if save_data(data):
         return next_id
     return None
@@ -284,7 +320,6 @@ def group_detail(group_id):
         
         # Get expenses for this group
         group_expenses = []
-        print(f"Group {group_id} has expense IDs: {group.get('expenses', [])}")
         
         for exp_id in group.get('expenses', []):
             # Try both string and integer keys
@@ -294,8 +329,8 @@ def group_detail(group_id):
             expense = None
             if expense_key_str in data.get('expenses', {}):
                 expense = data['expenses'][expense_key_str]
-            elif expense_key_int in data.get('expenses', {}):
-                expense = data['expenses'][expense_key_int]
+            elif isinstance(expense_key_int, int) and str(expense_key_int) in data.get('expenses', {}):
+                expense = data['expenses'][str(expense_key_int)]
             
             if expense and expense.get('group_id') == group_id:
                 try:
@@ -316,7 +351,6 @@ def group_detail(group_id):
                     expense['date_display'] = datetime.fromisoformat(expense['date']).strftime('%Y-%m-%d %H:%M')
                     expense['visit_date_display'] = expense['visit_date'][:10]
                     group_expenses.append(expense)
-                    print(f"Found expense: {expense['description']} (ID: {exp_id})")
                 except (ValueError, KeyError) as e:
                     print(f"Error processing expense {exp_id}: {e}")
                     continue
@@ -327,16 +361,12 @@ def group_detail(group_id):
         # Calculate total spent
         total_spent = sum(expense.get('amount', 0) for expense in group_expenses)
         
-        print(f"Final group expenses count for group {group_id}: {len(group_expenses)}")
-        
         return render_template('group_detail.html', 
                              group=group, 
                              expenses=group_expenses,
                              total_spent=total_spent)
     except Exception as e:
         print(f"Error in group_detail: {e}")
-        import traceback
-        traceback.print_exc()
         flash('Error loading group details. Please try again.', 'error')
         return redirect(url_for('index'))
 
@@ -389,8 +419,6 @@ def add_expense(group_id):
                 flash('Error creating expense. Please try again.', 'error')
                 return redirect(url_for('add_expense', group_id=group_id))
             
-            print(f"Creating new expense with ID: {expense_id}")
-            
             # Create the expense object
             expense = {
                 'id': expense_id,
@@ -434,23 +462,9 @@ def add_expense(group_id):
             if 'expenses' not in group:
                 group['expenses'] = []
             
-            # Convert existing expense IDs to integers for comparison
-            existing_expense_ids = []
-            for exp_id in group['expenses']:
-                try:
-                    existing_expense_ids.append(int(exp_id))
-                except (ValueError, TypeError):
-                    existing_expense_ids.append(exp_id)
-            
             # Add the new expense ID if it doesn't exist
-            if expense_id not in existing_expense_ids:
+            if expense_id not in group['expenses']:
                 group['expenses'].append(expense_id)
-                print(f"Added expense {expense_id} to group {group_id}")
-            else:
-                print(f"Expense {expense_id} already exists in group {group_id}")
-            
-            print(f"Group {group_id} now has {len(group['expenses'])} expenses")
-            print(f"Total expenses in data: {len(data['expenses'])}")
             
             if save_data(data):
                 flash('Expense added successfully!', 'success')
@@ -465,41 +479,8 @@ def add_expense(group_id):
         
     except Exception as e:
         print(f"Error in add_expense: {e}")
-        import traceback
-        traceback.print_exc()
         flash(f'Error: Please try again.', 'error')
         return redirect(url_for('group_detail', group_id=group_id))
-    
-@app.route('/fix_data')
-def fix_data():
-    """Route to fix data structure issues"""
-    try:
-        data = load_data()
-        
-        # Fix expense IDs in groups
-        for group_id, group in data.get('groups', {}).items():
-            if 'expenses' in group and isinstance(group['expenses'], list):
-                # Convert all expense IDs to integers
-                fixed_expenses = []
-                for exp_id in group['expenses']:
-                    try:
-                        fixed_expenses.append(int(exp_id))
-                    except (ValueError, TypeError):
-                        # If it's already an integer, keep it
-                        fixed_expenses.append(exp_id)
-                group['expenses'] = fixed_expenses
-                print(f"Fixed expenses for group {group_id}: {group['expenses']}")
-        
-        if save_data(data):
-            flash('Data structure fixed successfully!', 'success')
-        else:
-            flash('Error fixing data', 'error')
-        
-        return redirect(url_for('index'))
-    except Exception as e:
-        print(f"Error fixing data: {e}")
-        flash('Error fixing data', 'error')
-        return redirect(url_for('index'))
 
 @app.route('/group/<int:group_id>/settle')
 def settle_up(group_id):
@@ -692,34 +673,36 @@ def debug_data():
         })
     except Exception as e:
         return jsonify({'error': str(e)})
-    
-@app.route('/debug/expenses')
-def debug_expenses():
-    """Debug route to check expense data"""
+
+@app.route('/fix_data')
+def fix_data():
+    """Route to fix data structure issues"""
     try:
         data = load_data()
-        debug_info = {
-            'groups': {},
-            'expenses': {},
-            'next_expense_id': data.get('next_expense_id')
-        }
         
+        # Fix expense IDs in groups
         for group_id, group in data.get('groups', {}).items():
-            debug_info['groups'][group_id] = {
-                'name': group.get('name'),
-                'expense_ids': group.get('expenses', [])
-            }
+            if 'expenses' in group and isinstance(group['expenses'], list):
+                # Convert all expense IDs to integers
+                fixed_expenses = []
+                for exp_id in group['expenses']:
+                    try:
+                        fixed_expenses.append(int(exp_id))
+                    except (ValueError, TypeError):
+                        # If it's already an integer, keep it
+                        fixed_expenses.append(exp_id)
+                group['expenses'] = fixed_expenses
         
-        for exp_id, expense in data.get('expenses', {}).items():
-            debug_info['expenses'][exp_id] = {
-                'description': expense.get('description'),
-                'group_id': expense.get('group_id'),
-                'amount': expense.get('amount')
-            }
+        if save_data(data):
+            flash('Data structure fixed successfully!', 'success')
+        else:
+            flash('Error fixing data', 'error')
         
-        return jsonify(debug_info)
+        return redirect(url_for('index'))
     except Exception as e:
-        return jsonify({'error': str(e)})
+        print(f"Error fixing data: {e}")
+        flash('Error fixing data', 'error')
+        return redirect(url_for('index'))
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
