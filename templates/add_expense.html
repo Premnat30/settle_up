@@ -19,33 +19,9 @@
                         </div>
 
                         <div class="mb-3">
-                            <label for="base_amount" class="form-label">Base Amount ($)</label>
+                            <label for="base_amount" class="form-label">Amount ($)</label>
                             <input type="number" class="form-control" id="base_amount" name="base_amount" 
                                    step="0.01" min="0.01" required placeholder="0.00">
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-4 mb-3">
-                                <label for="discount_percent" class="form-label">Discount (%)</label>
-                                <input type="number" class="form-control" id="discount_percent" name="discount_percent" 
-                                       step="0.01" min="0" max="100" value="0">
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label for="service_tax_percent" class="form-label">Service Tax (%)</label>
-                                <input type="number" class="form-control" id="service_tax_percent" name="service_tax_percent" 
-                                       step="0.01" min="0" value="0">
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label for="gst_percent" class="form-label">GST (%)</label>
-                                <input type="number" class="form-control" id="gst_percent" name="gst_percent" 
-                                       step="0.01" min="0" value="0">
-                            </div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="visit_date" class="form-label">Visit Date</label>
-                            <input type="date" class="form-control" id="visit_date" name="visit_date" 
-                                   value="{{ today }}">
                         </div>
 
                         <div class="mb-3">
