@@ -106,66 +106,102 @@ def group_detail(group_id):
 
 @app.route('/group/<int:group_id>/add_expense', methods=['GET', 'POST'])
 def add_expense(group_id):
-    data = load_data()
-    group = data['groups'].get(group_id)
-    
-    if not group:
-        flash('Group not found', 'error')
-        return redirect(url_for('index'))
-    
-    if request.method == 'POST':
-        description = request.form['description'].strip()
-        amount = float(request.form['amount'])
-        paid_by = request.form['paid_by']
-        split_type = request.form['split_type']
+    try:
+        data = load_data()
+        group = data['groups'].get(str(group_id))
         
-        if not description:
-            flash('Please enter a description', 'error')
-            return redirect(url_for('add_expense', group_id=group_id))
+        if not group:
+            flash('Group not found', 'error')
+            return redirect(url_for('index'))
         
-        if amount <= 0:
-            flash('Amount must be greater than 0', 'error')
-            return redirect(url_for('add_expense', group_id=group_id))
-        
-        expense_id = get_next_expense_id()
-        
-        expense = {
-            'id': expense_id,
-            'description': description,
-            'amount': amount,
-            'paid_by': paid_by,
-            'group_id': group_id,
-            'split_type': split_type,
-            'date': datetime.now().isoformat(),
-            'shares': {}
-        }
-        
-        # Calculate shares
-        if split_type == 'equal':
-            share_amount = round(amount / len(group['members']), 2)
-            for member in group['members']:
-                expense['shares'][member] = share_amount
-        else:
-            # Custom split
-            total_custom = 0
-            for member in group['members']:
-                share_amount = float(request.form.get(f'share_{member}', 0))
-                expense['shares'][member] = share_amount
-                total_custom += share_amount
+        if request.method == 'POST':
+            description = request.form['description'].strip()
             
-            # Validate custom split totals
-            if abs(total_custom - amount) > 0.01:
-                flash(f'Custom shares (${total_custom:.2f}) must equal total amount (${amount:.2f})', 'error')
+            # Get tax calculation fields
+            try:
+                base_amount = float(request.form['base_amount'])
+                discount_percent = float(request.form.get('discount_percent', 0))
+                service_tax_percent = float(request.form.get('service_tax_percent', 0))
+                gst_percent = float(request.form.get('gst_percent', 0))
+                visit_date = request.form.get('visit_date', '')
+            except ValueError:
+                flash('Please enter valid numbers for amounts', 'error')
+                return redirect(url_for('add_expense', group_id=group_id))
+            
+            paid_by = request.form['paid_by']
+            split_type = request.form['split_type']
+            
+            if not description:
+                flash('Please enter a description', 'error')
+                return redirect(url_for('add_expense', group_id=group_id))
+            
+            if base_amount <= 0:
+                flash('Base amount must be greater than 0', 'error')
+                return redirect(url_for('add_expense', group_id=group_id))
+            
+            # Calculate total amount with taxes
+            discount_amount = (base_amount * discount_percent) / 100
+            amount_after_discount = base_amount - discount_amount
+            service_tax_amount = (amount_after_discount * service_tax_percent) / 100
+            gst_amount = (amount_after_discount * gst_percent) / 100
+            total_amount = amount_after_discount + service_tax_amount + gst_amount
+            
+            expense_id = get_next_expense_id()
+            
+            expense = {
+                'id': expense_id,
+                'description': description,
+                'base_amount': base_amount,
+                'discount_percent': discount_percent,
+                'service_tax_percent': service_tax_percent,
+                'gst_percent': gst_percent,
+                'amount': round(total_amount, 2),
+                'paid_by': paid_by,
+                'group_id': group_id,
+                'split_type': split_type,
+                'visit_date': visit_date,
+                'date': datetime.now().isoformat(),
+                'shares': {}
+            }
+            
+            # Calculate shares
+            if split_type == 'equal':
+                share_amount = round(total_amount / len(group['members']), 2)
+                for member in group['members']:
+                    expense['shares'][member] = share_amount
+            else:
+                # Custom split
+                total_custom = 0
+                for member in group['members']:
+                    share_amount = float(request.form.get(f'share_{member}', 0))
+                    expense['shares'][member] = share_amount
+                    total_custom += share_amount
+                
+                # Validate custom split totals
+                if abs(total_custom - total_amount) > 0.01:
+                    flash(f'Custom shares (${total_custom:.2f}) must equal total amount (${total_amount:.2f})', 'error')
+                    return redirect(url_for('add_expense', group_id=group_id))
+            
+            data['expenses'][str(expense_id)] = expense
+            if 'expenses' not in group:
+                group['expenses'] = []
+            group['expenses'].append(expense_id)
+            
+            if save_data(data):
+                flash('Expense added successfully!', 'success')
+                return redirect(url_for('group_detail', group_id=group_id))
+            else:
+                flash('Error saving expense. Please try again.', 'error')
                 return redirect(url_for('add_expense', group_id=group_id))
         
-        data['expenses'][expense_id] = expense
-        group['expenses'].append(expense_id)
-        save_data(data)
+        # Pass today's date for the form
+        today = datetime.now().strftime('%Y-%m-%d')
+        return render_template('add_expense.html', group=group, today=today)
         
-        flash('Expense added successfully!', 'success')
+    except Exception as e:
+        print(f"Error in add_expense: {e}")
+        flash(f'Error: Please try again.', 'error')
         return redirect(url_for('group_detail', group_id=group_id))
-    
-    return render_template('add_expense.html', group=group)
 
 @app.route('/group/<int:group_id>/settle')
 def settle_up(group_id):
