@@ -57,6 +57,55 @@
                         </div>
                     </div>
 
+                    <!-- Participant Selection -->
+                    <div class="form-section">
+                        <div class="section-header">
+                            <div class="section-icon">
+                                <i class="fas fa-users"></i>
+                            </div>
+                            <h5>Select Participants</h5>
+                        </div>
+
+                        <div class="form-group-enhanced">
+                            <label class="form-label-enhanced">
+                                <i class="fas fa-user-check me-2"></i>Who participated in this expense?
+                            </label>
+                            <div class="participants-selection">
+                                <div class="select-all-section mb-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="selectAllMembers">
+                                        <label class="form-check-label fw-bold" for="selectAllMembers">
+                                            Select All Members
+                                        </label>
+                                    </div>
+                                </div>
+                                
+                                <div class="members-grid">
+                                    {% for member in group.members %}
+                                    <div class="member-checkbox-item">
+                                        <div class="form-check">
+                                            <input class="form-check-input member-checkbox" type="checkbox" 
+                                                   name="participants" value="{{ member }}" 
+                                                   id="member_{{ loop.index }}" checked>
+                                            <label class="form-check-label" for="member_{{ loop.index }}">
+                                                <i class="fas fa-user me-2"></i>{{ member }}
+                                            </label>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                
+                                <div class="participants-count mt-3 p-3 bg-light rounded">
+                                    <small class="text-muted">
+                                        <i class="fas fa-info-circle me-1"></i>
+                                        Selected: <span id="selectedCount" class="fw-bold">{{ group.members|length }}</span> 
+                                        of {{ group.members|length }} members
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Amount Calculation -->
                     <div class="form-section">
                         <div class="section-header">
@@ -160,7 +209,7 @@
                                     <input class="form-check-input" type="radio" name="split_type" id="split_equal" 
                                            value="equal" checked onchange="toggleSplitType()">
                                     <label class="form-check-label" for="split_equal">
-                                        <i class="fas fa-equals me-1"></i>Equal Split
+                                        <i class="fas fa-equals me-1"></i>Equal Split (Among Selected Participants)
                                     </label>
                                 </div>
                                 <div class="form-check form-check-inline">
@@ -177,10 +226,10 @@
                         <div id="custom-split-section" style="display: none;">
                             <div class="custom-split-header mb-3">
                                 <h6>Custom Shares</h6>
-                                <small class="text-muted">Enter individual amounts for each member</small>
+                                <small class="text-muted">Enter individual amounts for selected participants</small>
                             </div>
                             {% for member in group.members %}
-                            <div class="row align-items-center mb-2">
+                            <div class="row align-items-center mb-2 participant-row" data-member="{{ member }}">
                                 <div class="col-md-6">
                                     <label class="form-label-enhanced">
                                         <i class="fas fa-user me-2"></i>{{ member }}
@@ -219,6 +268,49 @@
 </div>
 
 <style>
+.participants-selection {
+    border: 2px solid #e9ecef;
+    border-radius: 12px;
+    padding: 20px;
+    background: #fafbfc;
+}
+
+.select-all-section {
+    padding-bottom: 15px;
+    border-bottom: 1px solid #e9ecef;
+    margin-bottom: 15px;
+}
+
+.members-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+}
+
+.member-checkbox-item {
+    background: white;
+    padding: 12px 15px;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+    transition: all 0.3s ease;
+}
+
+.member-checkbox-item:hover {
+    border-color: #667eea;
+    background: #f8f9ff;
+}
+
+.member-checkbox-item .form-check-label {
+    font-weight: 500;
+    color: #495057;
+}
+
+.participants-count {
+    background: #e7f3ff !important;
+    border: 1px solid #b3d9ff;
+}
+
+/* Enhanced form styles */
 .calculation-results {
     border: 2px solid #e9ecef;
     background: linear-gradient(135deg, #f8f9ff 0%, #f0f2ff 100%);
@@ -242,7 +334,6 @@
     border-radius: 8px;
 }
 
-/* Enhanced form styles */
 .form-section {
     margin-bottom: 40px;
     padding-bottom: 30px;
@@ -370,6 +461,11 @@
     border: 1px solid #f0f0f0;
     margin-bottom: 30px;
 }
+
+/* Hide non-participants in custom split */
+.participant-row.non-participant {
+    display: none;
+}
 </style>
 
 <script>
@@ -377,15 +473,75 @@
 document.addEventListener('DOMContentLoaded', function() {
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('visit_date').value = today;
+    
+    // Initialize participant selection
+    updateSelectedCount();
+    updateCustomSplitVisibility();
     calculateTotal();
+    
+    // Select All functionality
+    document.getElementById('selectAllMembers').addEventListener('change', function() {
+        const checkboxes = document.querySelectorAll('.member-checkbox');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = this.checked;
+        });
+        updateSelectedCount();
+        updateCustomSplitVisibility();
+        calculateTotal();
+    });
+    
+    // Individual checkbox functionality
+    document.querySelectorAll('.member-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            updateSelectedCount();
+            updateCustomSplitVisibility();
+            calculateTotal();
+        });
+    });
 });
+
+function updateSelectedCount() {
+    const selectedCheckboxes = document.querySelectorAll('.member-checkbox:checked');
+    const totalMembers = document.querySelectorAll('.member-checkbox').length;
+    document.getElementById('selectedCount').textContent = selectedCheckboxes.length;
+    
+    // Update select all checkbox state
+    const selectAll = document.getElementById('selectAllMembers');
+    selectAll.checked = selectedCheckboxes.length === totalMembers;
+    selectAll.indeterminate = selectedCheckboxes.length > 0 && selectedCheckboxes.length < totalMembers;
+}
+
+function updateCustomSplitVisibility() {
+    const selectedParticipants = Array.from(document.querySelectorAll('.member-checkbox:checked'))
+        .map(checkbox => checkbox.value);
+    
+    // Show/hide participant rows in custom split
+    document.querySelectorAll('.participant-row').forEach(row => {
+        const member = row.getAttribute('data-member');
+        if (selectedParticipants.includes(member)) {
+            row.classList.remove('non-participant');
+        } else {
+            row.classList.add('non-participant');
+        }
+    });
+}
 
 function calculateTotal() {
     const baseAmount = parseFloat(document.getElementById('base_amount').value) || 0;
     const discountPercent = parseFloat(document.getElementById('discount_percent').value) || 0;
     const serviceTaxPercent = parseFloat(document.getElementById('service_tax_percent').value) || 0;
     const gstPercent = parseFloat(document.getElementById('gst_percent').value) || 0;
-    const memberCount = {{ group.members|length }};
+    
+    // Get selected participants count
+    const selectedParticipants = document.querySelectorAll('.member-checkbox:checked');
+    const participantCount = selectedParticipants.length;
+    
+    if (participantCount === 0) {
+        // Show error if no participants selected
+        document.getElementById('perPersonDisplay').textContent = 'Select participants';
+        document.getElementById('perPersonDisplay').className = 'fw-bold text-danger';
+        return;
+    }
     
     // Calculate amounts
     const discountAmount = (baseAmount * discountPercent) / 100;
@@ -393,7 +549,7 @@ function calculateTotal() {
     const serviceTaxAmount = (amountAfterDiscount * serviceTaxPercent) / 100;
     const gstAmount = (amountAfterDiscount * gstPercent) / 100;
     const totalAmount = amountAfterDiscount + serviceTaxAmount + gstAmount;
-    const perPersonAmount = totalAmount / memberCount;
+    const perPersonAmount = totalAmount / participantCount;
     
     // Update display
     document.getElementById('baseAmountDisplay').textContent = `$${baseAmount.toFixed(2)}`;
@@ -403,11 +559,20 @@ function calculateTotal() {
     document.getElementById('gstDisplay').textContent = `$${gstAmount.toFixed(2)}`;
     document.getElementById('totalAmountDisplay').textContent = `$${totalAmount.toFixed(2)}`;
     document.getElementById('perPersonDisplay').textContent = `$${perPersonAmount.toFixed(2)}`;
+    document.getElementById('perPersonDisplay').className = 'fw-bold text-warning';
     
     // Update equal shares if equal split is selected
     if (document.getElementById('split_equal').checked) {
         document.querySelectorAll('.share-input').forEach(input => {
-            input.value = perPersonAmount.toFixed(2);
+            const memberRow = input.closest('.participant-row');
+            const member = memberRow.getAttribute('data-member');
+            const memberCheckbox = document.querySelector(`.member-checkbox[value="${member}"]`);
+            
+            if (memberCheckbox && memberCheckbox.checked) {
+                input.value = perPersonAmount.toFixed(2);
+            } else {
+                input.value = '0';
+            }
         });
     }
     
@@ -433,7 +598,11 @@ function validateCustomSplit() {
     let customTotal = 0;
     
     shareInputs.forEach(input => {
-        customTotal += parseFloat(input.value) || 0;
+        // Only count shares for selected participants
+        const memberRow = input.closest('.participant-row');
+        if (!memberRow.classList.contains('non-participant')) {
+            customTotal += parseFloat(input.value) || 0;
+        }
     });
     
     const validationElement = document.getElementById('splitValidation');
@@ -452,13 +621,25 @@ function validateCustomSplit() {
 
 // Form submission validation
 document.getElementById('expenseForm').addEventListener('submit', function(e) {
+    // Check if at least one participant is selected
+    const selectedParticipants = document.querySelectorAll('.member-checkbox:checked');
+    if (selectedParticipants.length === 0) {
+        e.preventDefault();
+        alert('Please select at least one participant for this expense.');
+        return false;
+    }
+    
     if (document.getElementById('split_custom').checked) {
         const totalAmount = parseFloat(document.getElementById('totalAmountDisplay').textContent.replace('$', '')) || 0;
         const shareInputs = document.querySelectorAll('.share-input');
         let customTotal = 0;
         
         shareInputs.forEach(input => {
-            customTotal += parseFloat(input.value) || 0;
+            // Only count shares for selected participants
+            const memberRow = input.closest('.participant-row');
+            if (!memberRow.classList.contains('non-participant')) {
+                customTotal += parseFloat(input.value) || 0;
+            }
         });
         
         if (Math.abs(customTotal - totalAmount) > 0.01) {

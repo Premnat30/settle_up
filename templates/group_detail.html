@@ -108,27 +108,112 @@
                     {% if expenses %}
                     <div class="list-group list-group-flush">
                         {% for expense in expenses %}
-                        <div class="list-group-item">
+                        <div class="list-group-item expense-item">
                             <div class="d-flex w-100 justify-content-between align-items-start">
                                 <div class="flex-grow-1 me-3">
-                                    <h6 class="mb-1 text-primary">{{ expense.description }}</h6>
-                                    <p class="mb-1 text-muted">
-                                        <i class="fas fa-user-check me-1"></i> Paid by <strong>{{ expense.paid_by }}</strong>
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <h6 class="mb-0 text-primary">{{ expense.description }}</h6>
+                                        <div class="expense-actions">
+                                            <a href="{{ url_for('edit_expense', group_id=group.id, expense_id=expense.id) }}" 
+                                               class="btn btn-sm btn-outline-primary" title="Edit Expense">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" 
+                                                    data-bs-toggle="modal" 
+                                                    data-bs-target="#deleteExpenseModal{{ expense.id }}"
+                                                    title="Delete Expense">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="expense-meta mb-2">
+                                        <span class="badge bg-success me-2">
+                                            <i class="fas fa-user-check me-1"></i>Paid by {{ expense.paid_by }}
+                                        </span>
                                         {% if expense.split_type == 'equal' %}
-                                        <span class="badge bg-info ms-2">Equal Split</span>
+                                        <span class="badge bg-info me-2">Equal Split</span>
                                         {% else %}
-                                        <span class="badge bg-warning ms-2">Custom Split</span>
+                                        <span class="badge bg-warning me-2">Custom Split</span>
                                         {% endif %}
-                                    </p>
+                                        
+                                        <!-- Participant Count Badge -->
+                                        {% set participant_count = expense.participants|length if expense.participants else group.members|length %}
+                                        {% if participant_count < group.members|length %}
+                                        <span class="badge bg-secondary me-2" 
+                                              title="Participants: {{ expense.participants|join(', ') if expense.participants else 'All members' }}">
+                                            <i class="fas fa-user-friends me-1"></i>{{ participant_count }}/{{ group.members|length }}
+                                        </span>
+                                        {% endif %}
+                                        
+                                        {% if expense.visit_date %}
+                                        <span class="badge bg-secondary">
+                                            <i class="fas fa-calendar me-1"></i>{{ expense.visit_date_display }}
+                                        </span>
+                                        {% endif %}
+                                    </div>
+
+                                    <!-- Amount Breakdown -->
+                                    <div class="amount-breakdown small text-muted mb-2">
+                                        <div class="d-flex flex-wrap gap-2">
+                                            <span>Base: <strong>${{ "%.2f"|format(expense.base_amount) }}</strong></span>
+                                            {% if expense.discount_percent > 0 %}
+                                            <span class="text-danger">Discount: <strong>{{ expense.discount_percent }}%</strong></span>
+                                            {% endif %}
+                                            {% if expense.service_tax_percent > 0 %}
+                                            <span>Service Tax: <strong>{{ expense.service_tax_percent }}%</strong></span>
+                                            {% endif %}
+                                            {% if expense.gst_percent > 0 %}
+                                            <span>GST: <strong>{{ expense.gst_percent }}%</strong></span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+
+                                    <!-- Participant List (if not all members participated) -->
+                                    {% if expense.participants and expense.participants|length < group.members|length %}
+                                    <div class="participants-list mb-2">
+                                        <small class="text-muted">
+                                            <i class="fas fa-users me-1"></i>
+                                            <strong>Participants:</strong> 
+                                            {{ expense.participants|join(', ') }}
+                                        </small>
+                                    </div>
+                                    {% endif %}
+
                                     <small class="text-muted">
-                                        <i class="fas fa-clock me-1"></i> {{ expense.date_display }}
+                                        <i class="fas fa-clock me-1"></i>Added {{ expense.date_display }}
                                     </small>
                                 </div>
                                 <div class="text-end">
-                                    <h5 class="text-success mb-1">${{ "%.2f"|format(expense.amount) }}</h5>
-                                    <small class="text-muted">
-                                        ${{ "%.2f"|format(expense.amount / group.members|length) }}/person
-                                    </small>
+                                    <div class="expense-amount mb-2">
+                                        <h4 class="text-success mb-0">${{ "%.2f"|format(expense.amount) }}</h4>
+                                        {% set actual_participants = expense.participants|length if expense.participants else group.members|length %}
+                                        <small class="text-muted">
+                                            ${{ "%.2f"|format(expense.amount / actual_participants) }}/person
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Delete Modal for each expense -->
+                        <div class="modal fade" id="deleteExpenseModal{{ expense.id }}" tabindex="-1">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Confirm Delete</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <p>Are you sure you want to delete the expense "<strong>{{ expense.description }}</strong>"?</p>
+                                        <p class="text-muted small">This action cannot be undone.</p>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                        <form action="{{ url_for('delete_expense', group_id=group.id, expense_id=expense.id) }}" method="POST">
+                                            <button type="submit" class="btn btn-danger">Delete Expense</button>
+                                        </form>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -148,22 +233,86 @@
                     {% endif %}
                 </div>
             </div>
+
+            {% if expenses %}
+            <div class="mt-3 text-center">
+                <small class="text-muted">
+                    <i class="fas fa-info-circle me-1"></i>
+                    Total group spending: <strong>${{ "%.2f"|format(total_spent) }}</strong>
+                    {% set total_participants = group.members|length %}
+                    • Average per person: <strong>${{ "%.2f"|format(total_spent / total_participants) }}</strong>
+                </small>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
 
 <style>
+.expense-item {
+    border-left: 4px solid #0d6efd;
+    transition: all 0.3s ease;
+}
+
+.expense-item:hover {
+    background-color: #f8f9fa;
+    transform: translateX(5px);
+}
+
 .stat-number {
     font-size: 1.5rem;
     font-weight: bold;
     margin-bottom: 0.25rem;
 }
 
+.expense-amount {
+    min-width: 120px;
+}
+
+.expense-actions {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.expense-item:hover .expense-actions {
+    opacity: 1;
+}
+
 .empty-state {
     padding: 2rem;
 }
 
+.amount-breakdown {
+    background: #f8f9fa;
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin: 8px 0;
+}
+
+.expense-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.participants-list {
+    background: #e7f3ff;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border-left: 3px solid #0d6efd;
+}
+
 @media (max-width: 768px) {
+    .expense-meta {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .expense-actions {
+        opacity: 1; /* Always show on mobile */
+    }
+    
     .btn-group {
         flex-direction: column;
         width: 100%;
@@ -172,6 +321,21 @@
     .btn-group .btn {
         margin-bottom: 5px;
         border-radius: 6px !important;
+    }
+    
+    .participants-list {
+        font-size: 0.8rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .expense-meta .badge {
+        font-size: 0.7rem;
+        margin-bottom: 4px;
+    }
+    
+    .amount-breakdown {
+        font-size: 0.75rem;
     }
 }
 </style>

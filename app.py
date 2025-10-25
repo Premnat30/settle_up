@@ -398,6 +398,12 @@ def add_expense(group_id):
             paid_by = request.form['paid_by']
             split_type = request.form['split_type']
             
+            # Get selected participants
+            participants = request.form.getlist('participants')
+            if not participants:
+                flash('Please select at least one participant', 'error')
+                return redirect(url_for('add_expense', group_id=group_id))
+            
             if not description:
                 flash('Please enter a description', 'error')
                 return redirect(url_for('add_expense', group_id=group_id))
@@ -432,22 +438,29 @@ def add_expense(group_id):
                 'group_id': group_id,
                 'split_type': split_type,
                 'visit_date': visit_date,
+                'participants': participants,  # Store who participated
                 'date': datetime.now().isoformat(),
                 'shares': {}
             }
             
-            # Calculate shares
+            # Calculate shares - ONLY for selected participants
             if split_type == 'equal':
-                share_amount = round(total_amount / len(group['members']), 2)
+                share_amount = round(total_amount / len(participants), 2)
                 for member in group['members']:
-                    expense['shares'][member] = share_amount
+                    if member in participants:
+                        expense['shares'][member] = share_amount
+                    else:
+                        expense['shares'][member] = 0  # Not participating
             else:
-                # Custom split
+                # Custom split - only for selected participants
                 total_custom = 0
                 for member in group['members']:
-                    share_amount = float(request.form.get(f'share_{member}', 0))
-                    expense['shares'][member] = share_amount
-                    total_custom += share_amount
+                    if member in participants:
+                        share_amount = float(request.form.get(f'share_{member}', 0))
+                        expense['shares'][member] = share_amount
+                        total_custom += share_amount
+                    else:
+                        expense['shares'][member] = 0  # Not participating
                 
                 # Validate custom split totals
                 if abs(total_custom - total_amount) > 0.01:
