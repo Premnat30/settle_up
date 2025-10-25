@@ -613,17 +613,22 @@ def download_csv(group_id):
         output = StringIO()
         writer = csv.writer(output)
         
-        # Write header
-        writer.writerow(['SettleUp - Expense Report'])
+        # Write header with group info
+        writer.writerow(['SettleUp - Detailed Expense Report'])
         writer.writerow([f'Group: {group.get("name", "Unknown")}'])
+        writer.writerow([f'Members: {", ".join(group.get("members", []))}'])
         writer.writerow([f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M")}'])
         writer.writerow([])
         
-        # Write expenses
-        writer.writerow(['Date', 'Visit Date', 'Description', 'Paid By', 'Base Amount', 'Discount', 'Service Tax', 'GST', 'Total Amount', 'Split Type'])
+        # Write expense summary header
+        writer.writerow(['EXPENSE SUMMARY'])
+        writer.writerow(['Date', 'Visit Date', 'Description', 'Paid By', 'Base Amount', 'Discount %', 'Service Tax %', 'GST %', 'Total Amount', 'Split Type', 'Participants'])
         
+        # Write expense details
         for expense in group_expenses:
             visit_date = expense.get('visit_date', expense.get('date', '')[:10])
+            participants = expense.get('participants', group.get('members', []))
+            
             writer.writerow([
                 expense.get('date', '')[:10],
                 visit_date,
@@ -634,18 +639,95 @@ def download_csv(group_id):
                 f"{expense.get('service_tax_percent', 0)}%",
                 f"{expense.get('gst_percent', 0)}%",
                 f"${expense.get('amount', 0):.2f}",
-                expense.get('split_type', 'equal').title()
+                expense.get('split_type', 'equal').title(),
+                ", ".join(participants) if participants else "All members"
             ])
+        
+        writer.writerow([])
+        writer.writerow([])
+        
+        # Write detailed member shares section
+        writer.writerow(['DETAILED MEMBER SHARES'])
+        writer.writerow(['Expense', 'Date', 'Member', 'Share Amount', 'Paid?', 'Balance'])
+        
+        for expense in group_expenses:
+            expense_name = expense.get('description', 'Unknown')
+            expense_date = expense.get('date', '')[:10]
+            paid_by = expense.get('paid_by', '')
+            shares = expense.get('shares', {})
+            
+            # Write share for each member
+            for member in group.get('members', []):
+                share_amount = shares.get(member, 0)
+                paid_status = "Yes" if member == paid_by else "No"
+                
+                # Calculate balance (positive if paid more than share, negative if owes)
+                if member == paid_by:
+                    balance = expense.get('amount', 0) - share_amount
+                else:
+                    balance = -share_amount
+                
+                writer.writerow([
+                    expense_name,
+                    expense_date,
+                    member,
+                    f"${share_amount:.2f}",
+                    paid_status,
+                    f"${balance:.2f}"
+                ])
+        
+        writer.writerow([])
+        writer.writerow([])
+        
+        # Write summary section
+        writer.writerow(['MEMBER SUMMARY'])
+        writer.writerow(['Member', 'Total Paid', 'Total Owed', 'Net Balance'])
+        
+        # Calculate member balances
+        member_totals = {member: {'paid': 0, 'owed': 0, 'balance': 0} for member in group.get('members', [])}
+        
+        for expense in group_expenses:
+            paid_by = expense.get('paid_by', '')
+            shares = expense.get('shares', {})
+            
+            # Add to paid total for payer
+            if paid_by in member_totals:
+                member_totals[paid_by]['paid'] += expense.get('amount', 0)
+            
+            # Add to owed total for all members
+            for member, share in shares.items():
+                if member in member_totals:
+                    member_totals[member]['owed'] += share
+        
+        # Calculate net balance and write summary
+        for member in group.get('members', []):
+            if member in member_totals:
+                total_paid = member_totals[member]['paid']
+                total_owed = member_totals[member]['owed']
+                net_balance = total_paid - total_owed
+                
+                writer.writerow([
+                    member,
+                    f"${total_paid:.2f}",
+                    f"${total_owed:.2f}",
+                    f"${net_balance:.2f}",
+                    "Creditor" if net_balance > 0 else "Debtor" if net_balance < 0 else "Settled"
+                ])
         
         # Prepare response
         output.seek(0)
+        filename = f"settleup_{group.get('name', 'group').replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
+        
         return Response(
             output.getvalue(),
             mimetype="text/csv",
-            headers={"Content-Disposition": f"attachment;filename=settleup_{group.get('name', 'group')}_{datetime.now().strftime('%Y%m%d')}.csv"}
+            headers={"Content-Disposition": f"attachment;filename={filename}"}
         )
+        
     except Exception as e:
         print(f"Error generating CSV: {e}")
+        import traceback
+        traceback.print_exc()
         flash('Error generating CSV', 'error')
         return redirect(url_for('group_detail', group_id=group_id))
 
