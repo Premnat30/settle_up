@@ -11,50 +11,30 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-12345')
 # Simple file-based storage for persistence
 DATA_FILE = 'data.json'
 
-def load_data():
-    """Load data from file with proper error handling"""
-    try:
-        # Create data file if it doesn't exist
-        if not os.path.exists(DATA_FILE):
-            default_data = {
-                'groups': {},
-                'expenses': {},
-                'next_group_id': 1,
-                'next_expense_id': 1,
-                'recent_members': []
-            }
-            with open(DATA_FILE, 'w') as f:
-                json.dump(default_data, f, indent=2)
-            return default_data
-        
-        with open(DATA_FILE, 'r') as f:
-            data = json.load(f)
-            
-        # Ensure all required keys exist
-        required_keys = ['groups', 'expenses', 'next_group_id', 'next_expense_id', 'recent_members']
-        for key in required_keys:
-            if key not in data:
-                if key == 'groups':
-                    data[key] = {}
-                elif key == 'expenses':
-                    data[key] = {}
-                elif key == 'recent_members':
-                    data[key] = []
-                else:
-                    data[key] = 1
-        
-        return data
-        
-    except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
-        print(f"Error loading data: {e}")
-        # Return default structure if file is corrupted
-        return {
-            'groups': {},
-            'expenses': {},
-            'next_group_id': 1,
-            'next_expense_id': 1,
-            'recent_members': []
-        }
+def get_next_expense_id():
+    data = load_data()
+    
+    # Find the maximum existing expense ID
+    existing_ids = []
+    for exp_id in data.get('expenses', {}).keys():
+        try:
+            existing_ids.append(int(exp_id))
+        except (ValueError, TypeError):
+            continue
+    
+    # If no expenses exist, start from 1, else use max + 1
+    if existing_ids:
+        next_id = max(existing_ids) + 1
+    else:
+        next_id = 1
+    
+    # Update the next_expense_id counter
+    data['next_expense_id'] = next_id + 1
+    
+    if save_data(data):
+        return next_id
+    return None
+
 
 def save_data(data):
     """Save data to file with error handling"""
@@ -304,13 +284,18 @@ def group_detail(group_id):
         
         # Get expenses for this group
         group_expenses = []
-        print(f"Group expense IDs: {group.get('expenses', [])}")
-        print(f"All expense keys: {list(data.get('expenses', {}).keys())}")
+        print(f"Group {group_id} has expense IDs: {group.get('expenses', [])}")
         
         for exp_id in group.get('expenses', []):
-            expense_key = str(exp_id)
-            expense = data.get('expenses', {}).get(expense_key)
-            print(f"Looking for expense {exp_id} with key {expense_key}: {expense is not None}")
+            # Try both string and integer keys
+            expense_key_str = str(exp_id)
+            expense_key_int = exp_id
+            
+            expense = None
+            if expense_key_str in data.get('expenses', {}):
+                expense = data['expenses'][expense_key_str]
+            elif expense_key_int in data.get('expenses', {}):
+                expense = data['expenses'][expense_key_int]
             
             if expense and expense.get('group_id') == group_id:
                 try:
@@ -331,6 +316,7 @@ def group_detail(group_id):
                     expense['date_display'] = datetime.fromisoformat(expense['date']).strftime('%Y-%m-%d %H:%M')
                     expense['visit_date_display'] = expense['visit_date'][:10]
                     group_expenses.append(expense)
+                    print(f"Found expense: {expense['description']} (ID: {exp_id})")
                 except (ValueError, KeyError) as e:
                     print(f"Error processing expense {exp_id}: {e}")
                     continue
@@ -341,7 +327,7 @@ def group_detail(group_id):
         # Calculate total spent
         total_spent = sum(expense.get('amount', 0) for expense in group_expenses)
         
-        print(f"Final group expenses count: {len(group_expenses)}")
+        print(f"Final group expenses count for group {group_id}: {len(group_expenses)}")
         
         return render_template('group_detail.html', 
                              group=group, 
@@ -397,11 +383,13 @@ def add_expense(group_id):
             gst_amount = (amount_after_discount * gst_percent) / 100
             total_amount = amount_after_discount + service_tax_amount + gst_amount
             
-            # Get a new expense ID and ensure it's unique
+            # Get a new expense ID
             expense_id = get_next_expense_id()
             if expense_id is None:
                 flash('Error creating expense. Please try again.', 'error')
                 return redirect(url_for('add_expense', group_id=group_id))
+            
+            print(f"Creating new expense with ID: {expense_id}")
             
             # Create the expense object
             expense = {
@@ -438,23 +426,31 @@ def add_expense(group_id):
                     flash(f'Custom shares (${total_custom:.2f}) must equal total amount (${total_amount:.2f})', 'error')
                     return redirect(url_for('add_expense', group_id=group_id))
             
-            print(f"Creating new expense with ID: {expense_id}")
-            print(f"Current expenses in data: {list(data.get('expenses', {}).keys())}")
-            
             # Save the expense with string key
             expense_key = str(expense_id)
             data['expenses'][expense_key] = expense
             
-            # Add expense ID to group's expense list
+            # Add expense ID to group's expense list (ensure it's a list)
             if 'expenses' not in group:
                 group['expenses'] = []
             
-            # Check if expense_id is already in the list to avoid duplicates
-            if expense_id not in group['expenses']:
-                group['expenses'].append(expense_id)
+            # Convert existing expense IDs to integers for comparison
+            existing_expense_ids = []
+            for exp_id in group['expenses']:
+                try:
+                    existing_expense_ids.append(int(exp_id))
+                except (ValueError, TypeError):
+                    existing_expense_ids.append(exp_id)
             
-            print(f"Group expenses after adding: {group['expenses']}")
-            print(f"All expenses after adding: {list(data['expenses'].keys())}")
+            # Add the new expense ID if it doesn't exist
+            if expense_id not in existing_expense_ids:
+                group['expenses'].append(expense_id)
+                print(f"Added expense {expense_id} to group {group_id}")
+            else:
+                print(f"Expense {expense_id} already exists in group {group_id}")
+            
+            print(f"Group {group_id} now has {len(group['expenses'])} expenses")
+            print(f"Total expenses in data: {len(data['expenses'])}")
             
             if save_data(data):
                 flash('Expense added successfully!', 'success')
@@ -473,6 +469,37 @@ def add_expense(group_id):
         traceback.print_exc()
         flash(f'Error: Please try again.', 'error')
         return redirect(url_for('group_detail', group_id=group_id))
+    
+@app.route('/fix_data')
+def fix_data():
+    """Route to fix data structure issues"""
+    try:
+        data = load_data()
+        
+        # Fix expense IDs in groups
+        for group_id, group in data.get('groups', {}).items():
+            if 'expenses' in group and isinstance(group['expenses'], list):
+                # Convert all expense IDs to integers
+                fixed_expenses = []
+                for exp_id in group['expenses']:
+                    try:
+                        fixed_expenses.append(int(exp_id))
+                    except (ValueError, TypeError):
+                        # If it's already an integer, keep it
+                        fixed_expenses.append(exp_id)
+                group['expenses'] = fixed_expenses
+                print(f"Fixed expenses for group {group_id}: {group['expenses']}")
+        
+        if save_data(data):
+            flash('Data structure fixed successfully!', 'success')
+        else:
+            flash('Error fixing data', 'error')
+        
+        return redirect(url_for('index'))
+    except Exception as e:
+        print(f"Error fixing data: {e}")
+        flash('Error fixing data', 'error')
+        return redirect(url_for('index'))
 
 @app.route('/group/<int:group_id>/settle')
 def settle_up(group_id):
