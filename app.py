@@ -334,7 +334,7 @@ def group_detail(group_id):
             
             if expense and expense.get('group_id') == group_id:
                 try:
-                    # Ensure expense has all required fields
+                    # Ensure expense has all required fields with safe defaults
                     if 'date' not in expense:
                         expense['date'] = datetime.now().isoformat()
                     if 'visit_date' not in expense:
@@ -347,8 +347,15 @@ def group_detail(group_id):
                         expense['service_tax_percent'] = 0
                     if 'gst_percent' not in expense:
                         expense['gst_percent'] = 0
+                    if 'participants' not in expense:
+                        expense['participants'] = group['members']  # Default to all members for old expenses
                     
-                    expense['date_display'] = datetime.fromisoformat(expense['date']).strftime('%Y-%m-%d %H:%M')
+                    # Safe date parsing
+                    try:
+                        expense['date_display'] = datetime.fromisoformat(expense['date']).strftime('%Y-%m-%d %H:%M')
+                    except (ValueError, TypeError):
+                        expense['date_display'] = "Unknown date"
+                    
                     expense['visit_date_display'] = expense['visit_date'][:10]
                     group_expenses.append(expense)
                 except (ValueError, KeyError) as e:
@@ -367,6 +374,8 @@ def group_detail(group_id):
                              total_spent=total_spent)
     except Exception as e:
         print(f"Error in group_detail: {e}")
+        import traceback
+        traceback.print_exc()
         flash('Error loading group details. Please try again.', 'error')
         return redirect(url_for('index'))
 
