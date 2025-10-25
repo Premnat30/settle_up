@@ -182,31 +182,32 @@ def simplify_debts(balances):
 def index():
     try:
         data = load_data()
-        groups = list(data['groups'].values())
+        groups = []
         
-        # Convert string keys to integers for sorting and ensure proper structure
-        valid_groups = []
-        for group in groups:
-            if isinstance(group, dict) and 'id' in group and 'name' in group:
+        # Safely load groups
+        for group_id, group in data.get('groups', {}).items():
+            if isinstance(group, dict):
                 # Ensure all required fields exist
+                if 'id' not in group:
+                    group['id'] = int(group_id) if group_id.isdigit() else 0
                 if 'members' not in group:
                     group['members'] = []
                 if 'created_at' not in group:
                     group['created_at'] = datetime.now().isoformat()
                 if 'expenses' not in group:
                     group['expenses'] = []
-                valid_groups.append(group)
+                groups.append(group)
         
         # Sort groups by creation date (newest first)
-        valid_groups.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+        groups.sort(key=lambda x: x.get('created_at', ''), reverse=True)
         
         # Calculate stats for homepage
-        total_groups = len(valid_groups)
+        total_groups = len(groups)
         total_expenses = len(data.get('expenses', {}))
         total_spent = sum(expense.get('amount', 0) for expense in data.get('expenses', {}).values())
         
         return render_template('index.html', 
-                             groups=valid_groups, 
+                             groups=groups, 
                              total_groups=total_groups,
                              total_expenses=total_expenses,
                              total_spent=total_spent)
@@ -291,20 +292,39 @@ def group_detail(group_id):
             return redirect(url_for('index'))
         
         # Ensure group has all required fields
+        if 'id' not in group:
+            group['id'] = group_id
         if 'members' not in group:
             group['members'] = []
         if 'expenses' not in group:
             group['expenses'] = []
+        if 'created_at' not in group:
+            group['created_at'] = datetime.now().isoformat()
         
         # Get expenses for this group
         group_expenses = []
         for exp_id, expense in data.get('expenses', {}).items():
             if isinstance(expense, dict) and expense.get('group_id') == group_id:
                 try:
-                    expense['date_display'] = datetime.fromisoformat(expense.get('date', '')).strftime('%Y-%m-%d %H:%M')
-                    expense['visit_date_display'] = expense.get('visit_date', expense.get('date', '')[:10])
+                    # Ensure expense has all required fields
+                    if 'date' not in expense:
+                        expense['date'] = datetime.now().isoformat()
+                    if 'visit_date' not in expense:
+                        expense['visit_date'] = expense['date'][:10]
+                    if 'base_amount' not in expense:
+                        expense['base_amount'] = expense.get('amount', 0)
+                    if 'discount_percent' not in expense:
+                        expense['discount_percent'] = 0
+                    if 'service_tax_percent' not in expense:
+                        expense['service_tax_percent'] = 0
+                    if 'gst_percent' not in expense:
+                        expense['gst_percent'] = 0
+                    
+                    expense['date_display'] = datetime.fromisoformat(expense['date']).strftime('%Y-%m-%d %H:%M')
+                    expense['visit_date_display'] = expense['visit_date'][:10]
                     group_expenses.append(expense)
-                except (ValueError, KeyError):
+                except (ValueError, KeyError) as e:
+                    print(f"Error processing expense {exp_id}: {e}")
                     continue
         
         # Sort expenses by date (newest first)
@@ -434,8 +454,12 @@ def settle_up(group_id):
             flash('Group not found', 'error')
             return redirect(url_for('index'))
         
+        # Ensure group has required fields
+        if 'members' not in group:
+            group['members'] = []
+        
         # Calculate balances for each member
-        balances = {member: 0.0 for member in group.get('members', [])}
+        balances = {member: 0.0 for member in group['members']}
         
         # Get all expenses for this group
         group_expenses = []
