@@ -118,7 +118,9 @@
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="form-group-enhanced">
-                                    <label for="base_amount" class="form-label-enhanced">Base Amount ($)</label>
+                                    <label for="base_amount" class="form-label-enhanced">
+                                        <i class="fas fa-dollar-sign me-2"></i>Base Amount ($)
+                                    </label>
                                     <input type="number" class="form-control-enhanced" id="base_amount" name="base_amount" 
                                            step="0.01" min="0.01" required placeholder="0.00"
                                            oninput="calculateTotal()">
@@ -126,9 +128,11 @@
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group-enhanced">
-                                    <label for="discount_percent" class="form-label-enhanced">Discount (%)</label>
-                                    <input type="number" class="form-control-enhanced" id="discount_percent" name="discount_percent" 
-                                           step="0.01" min="0" max="100" value="0" placeholder="0"
+                                    <label for="discount_amount" class="form-label-enhanced">
+                                        <i class="fas fa-tag me-2"></i>Discount Amount ($)
+                                    </label>
+                                    <input type="number" class="form-control-enhanced" id="discount_amount" name="discount_amount" 
+                                           step="0.01" min="0" value="0" placeholder="0.00"
                                            oninput="calculateTotal()">
                                 </div>
                             </div>
@@ -137,17 +141,21 @@
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="form-group-enhanced">
-                                    <label for="service_tax_percent" class="form-label-enhanced">Service Tax (%)</label>
-                                    <input type="number" class="form-control-enhanced" id="service_tax_percent" name="service_tax_percent" 
-                                           step="0.01" min="0" value="0" placeholder="0"
+                                    <label for="service_tax_amount" class="form-label-enhanced">
+                                        <i class="fas fa-receipt me-2"></i>Service Tax Amount ($)
+                                    </label>
+                                    <input type="number" class="form-control-enhanced" id="service_tax_amount" name="service_tax_amount" 
+                                           step="0.01" min="0" value="0" placeholder="0.00"
                                            oninput="calculateTotal()">
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group-enhanced">
-                                    <label for="gst_percent" class="form-label-enhanced">GST (%)</label>
-                                    <input type="number" class="form-control-enhanced" id="gst_percent" name="gst_percent" 
-                                           step="0.01" min="0" value="0" placeholder="0"
+                                    <label for="gst_amount" class="form-label-enhanced">
+                                        <i class="fas fa-percentage me-2"></i>GST Amount ($)
+                                    </label>
+                                    <input type="number" class="form-control-enhanced" id="gst_amount" name="gst_amount" 
+                                           step="0.01" min="0" value="0" placeholder="0.00"
                                            oninput="calculateTotal()">
                                 </div>
                             </div>
@@ -528,9 +536,9 @@ function updateCustomSplitVisibility() {
 
 function calculateTotal() {
     const baseAmount = parseFloat(document.getElementById('base_amount').value) || 0;
-    const discountPercent = parseFloat(document.getElementById('discount_percent').value) || 0;
-    const serviceTaxPercent = parseFloat(document.getElementById('service_tax_percent').value) || 0;
-    const gstPercent = parseFloat(document.getElementById('gst_percent').value) || 0;
+    const discountAmount = parseFloat(document.getElementById('discount_amount').value) || 0;
+    const serviceTaxAmount = parseFloat(document.getElementById('service_tax_amount').value) || 0;
+    const gstAmount = parseFloat(document.getElementById('gst_amount').value) || 0;
     
     // Get selected participants count
     const selectedParticipants = document.querySelectorAll('.member-checkbox:checked');
@@ -543,11 +551,8 @@ function calculateTotal() {
         return;
     }
     
-    // Calculate amounts
-    const discountAmount = (baseAmount * discountPercent) / 100;
+    // Calculate amounts (SIMPLE ADDITION/SUBTRACTION - no percentage calculations)
     const amountAfterDiscount = baseAmount - discountAmount;
-    const serviceTaxAmount = (amountAfterDiscount * serviceTaxPercent) / 100;
-    const gstAmount = (amountAfterDiscount * gstPercent) / 100;
     const totalAmount = amountAfterDiscount + serviceTaxAmount + gstAmount;
     const perPersonAmount = totalAmount / participantCount;
     
