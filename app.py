@@ -422,7 +422,7 @@ def add_expense(group_id):
                 flash('Base amount must be greater than 0', 'error')
                 return redirect(url_for('add_expense', group_id=group_id))
             
-            # Calculate total amount with FIXED amounts
+            # Calculate total amount with FIXED amounts (no percentage calculations)
             amount_after_discount = base_amount - discount_amount
             total_amount = amount_after_discount + service_tax_amount + gst_amount
             
@@ -437,9 +437,9 @@ def add_expense(group_id):
                 'id': expense_id,
                 'description': description,
                 'base_amount': base_amount,
-                'discount_amount': discount_amount,
-                'service_tax_amount': service_tax_amount,
-                'gst_amount': gst_amount,
+                'discount_amount': discount_amount,  # Store as fixed amount
+                'service_tax_amount': service_tax_amount,  # Store as fixed amount
+                'gst_amount': gst_amount,  # Store as fixed amount
                 'amount': round(total_amount, 2),
                 'paid_by': paid_by,
                 'group_id': group_id,
@@ -734,9 +734,9 @@ def api_calculate_total():
     try:
         data = request.get_json()
         base_amount = float(data.get('base_amount', 0))
-        discount_amount = float(data.get('discount_amount', 0))
-        service_tax_amount = float(data.get('service_tax_amount', 0))
-        gst_amount = float(data.get('gst_amount', 0))
+        discount_amount = float(data.get('discount_amount', 0))  # Fixed amount
+        service_tax_amount = float(data.get('service_tax_amount', 0))  # Fixed amount
+        gst_amount = float(data.get('gst_amount', 0))  # Fixed amount
         
         result = calculate_total_amount(base_amount, discount_amount, service_tax_amount, gst_amount)
         
