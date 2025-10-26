@@ -199,6 +199,27 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Equal Split Breakdown -->
+                        <div class="equal-split-breakdown mt-3 p-3 bg-info bg-opacity-10 rounded" id="equalSplitBreakdown" style="display: none;">
+                            <h6 class="mb-2 text-center">
+                                <i class="fas fa-users me-2"></i>Equal Split of Charges
+                            </h6>
+                            <div class="row text-center small">
+                                <div class="col-4">
+                                    <small class="text-muted d-block">Discount/Member</small>
+                                    <div class="fw-bold text-danger" id="discountPerPerson">-$0.00</div>
+                                </div>
+                                <div class="col-4">
+                                    <small class="text-muted d-block">Service Tax/Member</small>
+                                    <div class="fw-bold text-info" id="serviceTaxPerPerson">$0.00</div>
+                                </div>
+                                <div class="col-4">
+                                    <small class="text-muted d-block">GST/Member</small>
+                                    <div class="fw-bold text-info" id="gstPerPerson">$0.00</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Split Type -->
@@ -234,7 +255,7 @@
                         <div id="custom-split-section" style="display: none;">
                             <div class="custom-split-header mb-3">
                                 <h6>Custom Shares</h6>
-                                <small class="text-muted">Enter individual amounts for selected participants</small>
+                                <small class="text-muted">Enter base amounts for selected participants. The system will automatically calculate total shares including equal distribution of discount, tax, and GST.</small>
                             </div>
                             {% for member in group.members %}
                             <div class="row align-items-center mb-2 participant-row" data-member="{{ member }}">
@@ -247,7 +268,7 @@
                                     <input type="number" class="form-control-enhanced share-input" 
                                            name="share_{{ member }}" step="0.01" min="0" 
                                            value="0" placeholder="0.00"
-                                           oninput="validateCustomSplit()">
+                                           oninput="handleCustomSplitInput()">
                                 </div>
                             </div>
                             {% endfor %}
@@ -474,6 +495,16 @@
 .participant-row.non-participant {
     display: none;
 }
+
+.equal-split-breakdown {
+    border-left: 4px solid #0dcaf0;
+    background: rgba(13, 202, 240, 0.05) !important;
+}
+
+.equal-split-breakdown h6 {
+    color: #0dcaf0;
+    font-size: 0.9rem;
+}
 </style>
 
 <script>
@@ -504,6 +535,13 @@ document.addEventListener('DOMContentLoaded', function() {
             updateSelectedCount();
             updateCustomSplitVisibility();
             calculateTotal();
+        });
+    });
+
+    // Add event listeners for custom split inputs
+    document.querySelectorAll('.share-input').forEach(input => {
+        input.addEventListener('input', function() {
+            handleCustomSplitInput();
         });
     });
 });
@@ -548,15 +586,21 @@ function calculateTotal() {
         // Show error if no participants selected
         document.getElementById('perPersonDisplay').textContent = 'Select participants';
         document.getElementById('perPersonDisplay').className = 'fw-bold text-danger';
+        document.getElementById('equalSplitBreakdown').style.display = 'none';
         return;
     }
     
-    // Calculate amounts (SIMPLE ADDITION/SUBTRACTION - no percentage calculations)
+    // Calculate amounts
     const amountAfterDiscount = baseAmount - discountAmount;
     const totalAmount = amountAfterDiscount + serviceTaxAmount + gstAmount;
     const perPersonAmount = totalAmount / participantCount;
     
-    // Update display
+    // Calculate equal shares per person
+    const discountPerPerson = discountAmount / participantCount;
+    const serviceTaxPerPerson = serviceTaxAmount / participantCount;
+    const gstPerPerson = gstAmount / participantCount;
+    
+    // Update main display
     document.getElementById('baseAmountDisplay').textContent = `$${baseAmount.toFixed(2)}`;
     document.getElementById('discountDisplay').textContent = `-$${discountAmount.toFixed(2)}`;
     document.getElementById('afterDiscountDisplay').textContent = `$${amountAfterDiscount.toFixed(2)}`;
@@ -565,6 +609,19 @@ function calculateTotal() {
     document.getElementById('totalAmountDisplay').textContent = `$${totalAmount.toFixed(2)}`;
     document.getElementById('perPersonDisplay').textContent = `$${perPersonAmount.toFixed(2)}`;
     document.getElementById('perPersonDisplay').className = 'fw-bold text-warning';
+    
+    // Update per-person breakdown display
+    document.getElementById('discountPerPerson').textContent = `-$${discountPerPerson.toFixed(2)}`;
+    document.getElementById('serviceTaxPerPerson').textContent = `$${serviceTaxPerPerson.toFixed(2)}`;
+    document.getElementById('gstPerPerson').textContent = `$${gstPerPerson.toFixed(2)}`;
+    
+    // Show/hide equal split breakdown
+    const equalSplitBreakdown = document.getElementById('equalSplitBreakdown');
+    if (participantCount > 0) {
+        equalSplitBreakdown.style.display = 'block';
+    } else {
+        equalSplitBreakdown.style.display = 'none';
+    }
     
     // Update equal shares if equal split is selected
     if (document.getElementById('split_equal').checked) {
@@ -579,20 +636,77 @@ function calculateTotal() {
                 input.value = '0';
             }
         });
+    } else {
+        // For custom split, calculate with equal distribution of charges
+        calculateCustomSplit();
     }
     
     validateCustomSplit();
+}
+
+function calculateCustomSplit() {
+    if (!document.getElementById('split_custom').checked) return;
+    
+    const baseAmount = parseFloat(document.getElementById('base_amount').value) || 0;
+    const discountAmount = parseFloat(document.getElementById('discount_amount').value) || 0;
+    const serviceTaxAmount = parseFloat(document.getElementById('service_tax_amount').value) || 0;
+    const gstAmount = parseFloat(document.getElementById('gst_amount').value) || 0;
+    
+    // Get selected participants
+    const selectedParticipants = Array.from(document.querySelectorAll('.member-checkbox:checked'))
+        .map(checkbox => checkbox.value);
+    
+    const participantCount = selectedParticipants.length;
+    
+    if (participantCount === 0) return;
+    
+    // Calculate equal shares of discount, tax, and GST for each member
+    const discountPerPerson = discountAmount / participantCount;
+    const serviceTaxPerPerson = serviceTaxAmount / participantCount;
+    const gstPerPerson = gstAmount / participantCount;
+    
+    let calculatedTotal = 0;
+    
+    // Calculate each member's total share
+    document.querySelectorAll('.share-input').forEach(input => {
+        const memberRow = input.closest('.participant-row');
+        const member = memberRow.getAttribute('data-member');
+        
+        if (selectedParticipants.includes(member)) {
+            const memberBaseAmount = parseFloat(input.value) || 0;
+            
+            // Each member pays: Base Amount + (Equal share of Service Tax) + (Equal share of GST) - (Equal share of Discount)
+            const memberTotalShare = memberBaseAmount + serviceTaxPerPerson + gstPerPerson - discountPerPerson;
+            
+            // Ensure share doesn't go negative
+            const finalShare = Math.max(0, memberTotalShare);
+            
+            input.value = finalShare.toFixed(2);
+            calculatedTotal += finalShare;
+        } else {
+            input.value = '0';
+        }
+    });
+}
+
+function handleCustomSplitInput() {
+    if (document.getElementById('split_custom').checked) {
+        calculateCustomSplit();
+        validateCustomSplit();
+    }
 }
 
 function toggleSplitType() {
     const customSection = document.getElementById('custom-split-section');
     if (document.getElementById('split_custom').checked) {
         customSection.style.display = 'block';
+        calculateCustomSplit();
     } else {
         customSection.style.display = 'none';
         // Reset to equal shares
         calculateTotal();
     }
+    validateCustomSplit();
 }
 
 function validateCustomSplit() {
@@ -601,25 +715,44 @@ function validateCustomSplit() {
     const totalAmount = parseFloat(document.getElementById('totalAmountDisplay').textContent.replace('$', '')) || 0;
     const shareInputs = document.querySelectorAll('.share-input');
     let customTotal = 0;
+    let hasCustomBaseAmounts = false;
     
     shareInputs.forEach(input => {
         // Only count shares for selected participants
         const memberRow = input.closest('.participant-row');
         if (!memberRow.classList.contains('non-participant')) {
-            customTotal += parseFloat(input.value) || 0;
+            const shareValue = parseFloat(input.value) || 0;
+            customTotal += shareValue;
+            
+            // Check if user has entered any custom base amounts
+            if (shareValue > 0) {
+                hasCustomBaseAmounts = true;
+            }
         }
     });
     
     const validationElement = document.getElementById('splitValidation');
     const messageElement = document.getElementById('validationMessage');
     
-    if (Math.abs(customTotal - totalAmount) > 0.01) {
+    if (!hasCustomBaseAmounts) {
+        // No custom amounts entered yet
         validationElement.style.display = 'block';
-        messageElement.textContent = `Custom shares total: $${customTotal.toFixed(2)} | Required: $${totalAmount.toFixed(2)} | Difference: $${(customTotal - totalAmount).toFixed(2)}`;
+        messageElement.textContent = 'Enter base amounts for each participant. The system will automatically calculate their total shares.';
+        validationElement.className = 'alert alert-info py-2';
+    } else if (Math.abs(customTotal - totalAmount) > 0.01) {
+        // Totals don't match (shouldn't happen with automatic calculation, but just in case)
+        validationElement.style.display = 'block';
+        messageElement.textContent = `Custom shares total: $${customTotal.toFixed(2)} | Required: $${totalAmount.toFixed(2)} | Difference: $${(customTotal - totalAmount).toFixed(2)}. The system will auto-adjust.`;
         validationElement.className = 'alert alert-warning py-2';
+        
+        // Auto-adjust the amounts to match the total
+        setTimeout(() => {
+            calculateCustomSplit(); // Recalculate to fix any discrepancies
+        }, 1000);
     } else {
+        // Perfect match
         validationElement.style.display = 'block';
-        messageElement.textContent = 'Custom shares match total amount perfectly!';
+        messageElement.textContent = '✓ Custom shares calculated perfectly! Each member pays their base amount plus equal shares of taxes and discount.';
         validationElement.className = 'alert alert-success py-2';
     }
 }
