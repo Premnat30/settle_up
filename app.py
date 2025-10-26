@@ -114,25 +114,26 @@ def update_recent_members(members_list):
     data['recent_members'] = recent_members[:10]
     save_data(data)
 
-def calculate_total_amount(base_amount, discount_percent=0, service_tax_percent=0, gst_percent=0):
-    """Calculate total amount after discount, service tax, and GST"""
+def calculate_total_amount(base_amount, discount_amount=0, service_tax_amount=0, gst_amount=0):
+    """Calculate total amount with fixed discount, tax, and GST amounts"""
     try:
         base_amount = float(base_amount)
-        discount_percent = float(discount_percent)
-        service_tax_percent = float(service_tax_percent)
-        gst_percent = float(gst_percent)
+        discount_amount = float(discount_amount)
+        service_tax_amount = float(service_tax_amount)
+        gst_amount = float(gst_amount)
         
-        # Calculate discount amount
-        discount_amount = (base_amount * discount_percent) / 100
+        # Validate inputs
+        if base_amount < 0 or discount_amount < 0 or service_tax_amount < 0 or gst_amount < 0:
+            return None
+        
+        # Calculate amount after discount
         amount_after_discount = base_amount - discount_amount
         
-        # Calculate service tax
-        service_tax_amount = (amount_after_discount * service_tax_percent) / 100
+        # Ensure amount after discount doesn't go negative
+        if amount_after_discount < 0:
+            amount_after_discount = 0
         
-        # Calculate GST
-        gst_amount = (amount_after_discount * gst_percent) / 100
-        
-        # Total amount
+        # Total amount: Base - Discount + Service Tax + GST
         total_amount = amount_after_discount + service_tax_amount + gst_amount
         
         return {
@@ -341,12 +342,12 @@ def group_detail(group_id):
                         expense['visit_date'] = expense['date'][:10]
                     if 'base_amount' not in expense:
                         expense['base_amount'] = expense.get('amount', 0)
-                    if 'discount_percent' not in expense:
-                        expense['discount_percent'] = 0
-                    if 'service_tax_percent' not in expense:
-                        expense['service_tax_percent'] = 0
-                    if 'gst_percent' not in expense:
-                        expense['gst_percent'] = 0
+                    if 'discount_amount' not in expense:
+                        expense['discount_amount'] = 0
+                    if 'service_tax_amount' not in expense:
+                        expense['service_tax_amount'] = 0
+                    if 'gst_amount' not in expense:
+                        expense['gst_amount'] = 0
                     if 'participants' not in expense:
                         expense['participants'] = group['members']  # Default to all members for old expenses
                     
@@ -393,12 +394,12 @@ def add_expense(group_id):
         if request.method == 'POST':
             description = request.form['description'].strip()
             
-            # Get tax calculation fields
+            # Get tax calculation fields as FIXED AMOUNTS
             try:
                 base_amount = float(request.form['base_amount'])
-                discount_percent = float(request.form.get('discount_percent', 0))
-                service_tax_percent = float(request.form.get('service_tax_percent', 0))
-                gst_percent = float(request.form.get('gst_percent', 0))
+                discount_amount = float(request.form.get('discount_amount', 0))
+                service_tax_amount = float(request.form.get('service_tax_amount', 0))
+                gst_amount = float(request.form.get('gst_amount', 0))
                 visit_date = request.form.get('visit_date', '')
             except ValueError:
                 flash('Please enter valid numbers for amounts', 'error')
@@ -421,11 +422,8 @@ def add_expense(group_id):
                 flash('Base amount must be greater than 0', 'error')
                 return redirect(url_for('add_expense', group_id=group_id))
             
-            # Calculate total amount with taxes
-            discount_amount = (base_amount * discount_percent) / 100
+            # Calculate total amount with FIXED amounts
             amount_after_discount = base_amount - discount_amount
-            service_tax_amount = (amount_after_discount * service_tax_percent) / 100
-            gst_amount = (amount_after_discount * gst_percent) / 100
             total_amount = amount_after_discount + service_tax_amount + gst_amount
             
             # Get a new expense ID
@@ -434,14 +432,14 @@ def add_expense(group_id):
                 flash('Error creating expense. Please try again.', 'error')
                 return redirect(url_for('add_expense', group_id=group_id))
             
-            # Create the expense object
+            # Create the expense object with FIXED amounts
             expense = {
                 'id': expense_id,
                 'description': description,
                 'base_amount': base_amount,
-                'discount_percent': discount_percent,
-                'service_tax_percent': service_tax_percent,
-                'gst_percent': gst_percent,
+                'discount_amount': discount_amount,
+                'service_tax_amount': service_tax_amount,
+                'gst_amount': gst_amount,
                 'amount': round(total_amount, 2),
                 'paid_by': paid_by,
                 'group_id': group_id,
@@ -622,7 +620,7 @@ def download_csv(group_id):
         
         # Write expense summary header
         writer.writerow(['EXPENSE SUMMARY'])
-        writer.writerow(['Date', 'Visit Date', 'Description', 'Paid By', 'Base Amount', 'Discount %', 'Service Tax %', 'GST %', 'Total Amount', 'Split Type', 'Participants'])
+        writer.writerow(['Date', 'Visit Date', 'Description', 'Paid By', 'Base Amount', 'Discount Amount', 'Service Tax Amount', 'GST Amount', 'Total Amount', 'Split Type', 'Participants'])
         
         # Write expense details
         for expense in group_expenses:
@@ -635,9 +633,9 @@ def download_csv(group_id):
                 expense.get('description', ''),
                 expense.get('paid_by', ''),
                 f"${expense.get('base_amount', 0):.2f}",
-                f"{expense.get('discount_percent', 0)}%",
-                f"{expense.get('service_tax_percent', 0)}%",
-                f"{expense.get('gst_percent', 0)}%",
+                f"${expense.get('discount_amount', 0):.2f}",
+                f"${expense.get('service_tax_amount', 0):.2f}",
+                f"${expense.get('gst_amount', 0):.2f}",
                 f"${expense.get('amount', 0):.2f}",
                 expense.get('split_type', 'equal').title(),
                 ", ".join(participants) if participants else "All members"
@@ -736,11 +734,11 @@ def api_calculate_total():
     try:
         data = request.get_json()
         base_amount = float(data.get('base_amount', 0))
-        discount_percent = float(data.get('discount_percent', 0))
-        service_tax_percent = float(data.get('service_tax_percent', 0))
-        gst_percent = float(data.get('gst_percent', 0))
+        discount_amount = float(data.get('discount_amount', 0))
+        service_tax_amount = float(data.get('service_tax_amount', 0))
+        gst_amount = float(data.get('gst_amount', 0))
         
-        result = calculate_total_amount(base_amount, discount_percent, service_tax_percent, gst_percent)
+        result = calculate_total_amount(base_amount, discount_amount, service_tax_amount, gst_amount)
         
         if result:
             return jsonify({'success': True, 'calculation': result})
