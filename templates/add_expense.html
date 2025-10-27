@@ -560,6 +560,9 @@ document.addEventListener('DOMContentLoaded', function() {
         input.addEventListener('input', function() {
             handleCustomSplitInput();
         });
+        
+        // Initialize all inputs as containing totals
+        input.setAttribute('data-is-base', 'false');
     });
 });
 
@@ -720,19 +723,29 @@ function calculateCustomSplit() {
         const member = memberRow.getAttribute('data-member');
         
         if (selectedParticipants.includes(member)) {
-            const memberBaseAmount = parseFloat(input.value) || 0;
-            totalBaseEntered += memberBaseAmount;
+            // Store the current value as base amount
+            const currentValue = parseFloat(input.value) || 0;
             
-            if (memberBaseAmount > 0 && input.getAttribute('data-manual') === 'true') {
+            // Check if this is a base amount (user entered) or total amount (system calculated)
+            if (input.getAttribute('data-is-base') === 'true' && currentValue > 0) {
+                // This is a user-entered base amount
+                memberShares.push({
+                    input: input,
+                    member: member,
+                    baseAmount: currentValue,
+                    manual: true
+                });
+                totalBaseEntered += currentValue;
                 hasManualInput = true;
+            } else {
+                // This is a system-calculated total, treat as zero base for recalculation
+                memberShares.push({
+                    input: input,
+                    member: member,
+                    baseAmount: 0,
+                    manual: false
+                });
             }
-            
-            memberShares.push({
-                input: input,
-                member: member,
-                baseAmount: memberBaseAmount,
-                manual: input.getAttribute('data-manual') === 'true'
-            });
         }
     });
     
@@ -742,10 +755,8 @@ function calculateCustomSplit() {
         const equalBaseAmount = baseAmount / participantCount;
         
         memberShares.forEach(share => {
-            if (!share.manual) {
-                share.input.value = equalBaseAmount.toFixed(2);
-                share.baseAmount = equalBaseAmount;
-            }
+            share.baseAmount = equalBaseAmount;
+            share.manual = false;
         });
         
         // Recalculate total base after distribution
@@ -755,7 +766,7 @@ function calculateCustomSplit() {
     // Calculate total amount that should be distributed (for validation)
     const totalAmount = baseAmount - discountAmount + serviceTaxAmount + gstAmount;
     
-    // Calculate each member's TOTAL share (not base amount)
+    // Calculate each member's TOTAL share
     let calculatedTotal = 0;
     const finalShares = [];
     
@@ -769,27 +780,32 @@ function calculateCustomSplit() {
             input: share.input,
             member: share.member,
             share: finalShare,
-            baseAmount: share.baseAmount
+            baseAmount: share.baseAmount,
+            manual: share.manual
         });
         
         calculatedTotal += finalShare;
     });
     
-    // Adjust for any rounding differences
+    // Adjust for any rounding differences to ensure exact match
     const difference = totalAmount - calculatedTotal;
     if (Math.abs(difference) > 0.001) {
-        // Distribute the difference to maintain accuracy
-        const adjustmentPerPerson = difference / participantCount;
+        // Distribute the difference proportionally
         finalShares.forEach(item => {
-            item.share += adjustmentPerPerson;
+            const adjustment = (item.share / calculatedTotal) * difference;
+            item.share += adjustment;
         });
+        // Recalculate total after adjustment
         calculatedTotal = finalShares.reduce((sum, item) => sum + item.share, 0);
     }
     
-    // Apply final TOTAL shares (not base amounts)
+    // Apply final TOTAL shares to input fields
     finalShares.forEach(item => {
-        // Store the calculated TOTAL in the input field
+        // Store the calculated TOTAL in the input field (this is what gets submitted)
         item.input.value = item.share.toFixed(2);
+        
+        // Mark that this is now a total amount, not a base amount
+        item.input.setAttribute('data-is-base', 'false');
         
         // Update breakdown display with correct calculation
         const breakdownElement = document.getElementById(`breakdown_${item.member}`);
@@ -805,8 +821,46 @@ function calculateCustomSplit() {
     });
     
     // Update the form to store base amounts separately for submission
-    updateBaseAmountsForSubmission(memberShares);
+    updateBaseAmountsForSubmission(finalShares);
+    
+    // Update the total display to show the calculated total
+    document.getElementById('totalAmountDisplay').textContent = `$${calculatedTotal.toFixed(2)}`;
 }
+
+// Update the handleCustomSplitInput function
+function handleCustomSplitInput() {
+    if (document.getElementById('split_custom').checked) {
+        // Mark this input as containing a base amount
+        event.target.setAttribute('data-is-base', 'true');
+        
+        // Recalculate with the new base amount
+        setTimeout(() => {
+            calculateCustomSplit();
+            validateCustomSplit();
+        }, 300);
+    }
+}
+
+// Update the toggleSplitType function to initialize data attributes
+function toggleSplitType() {
+    const customSection = document.getElementById('custom-split-section');
+    if (document.getElementById('split_custom').checked) {
+        customSection.style.display = 'block';
+        
+        // Initialize all inputs as containing totals (not base amounts)
+        document.querySelectorAll('.share-input').forEach(input => {
+            input.setAttribute('data-is-base', 'false');
+        });
+        
+        calculateCustomSplit();
+    } else {
+        customSection.style.display = 'none';
+        // Reset to equal shares
+        calculateTotal();
+    }
+    validateCustomSplit();
+}
+
 
 // Add this new function to store base amounts for form submission
 function updateBaseAmountsForSubmission(memberShares) {

@@ -196,33 +196,31 @@
     <!-- Features Section -->
     <section class="container my-5">
         <div class="row">
-            <div class="col-lg-4 mb-4">
+            <div class="col-lg-6 mb-4">
                 <div class="apple-card text-center">
                     <div class="feature-icon">
                         <i class="fas fa-users"></i>
                     </div>
                     <h4>Create Friend Groups</h4>
-                    <!-- Text removed as requested -->
+                    <p class="text-muted">Easily create groups for different friend circles - roommates, travel buddies, or dinner clubs.</p>
+                    <a href="{{ url_for('create_group') }}" class="btn btn-apple mt-3">
+                        <i class="fas fa-plus me-2"></i>Create Group
+                    </a>
                 </div>
             </div>
-            <div class="col-lg-4 mb-4">
+            <div class="col-lg-6 mb-4">
                 <div class="apple-card text-center">
                     <div class="feature-icon">
                         <i class="fas fa-receipt"></i>
                     </div>
                     <h4>Share Expenses</h4>
-                    <!-- Text removed as requested -->
+                    <p class="text-muted">Add expenses and split them fairly among friends. Choose equal splits or custom amounts.</p>
+                    <a href="{{ url_for('create_group') }}" class="btn btn-apple mt-3">
+                        <i class="fas fa-receipt me-2"></i>Add Expense
+                    </a>
                 </div>
             </div>
-            <div class="col-lg-4 mb-4">
-                <div class="apple-card text-center">
-                    <div class="feature-icon">
-                        <i class="fas fa-handshake"></i>
-                    </div>
-                    <h4>Settle Fairly</h4>
-                    <!-- Text removed as requested -->
-                </div>
-            </div>
+            <!-- Removed the "Settle Fairly" card as requested -->
         </div>
     </section>
 
