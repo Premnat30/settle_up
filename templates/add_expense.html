@@ -253,45 +253,44 @@
 
                         <!-- Custom Split Section -->
                         <div id="custom-split-section" style="display: none;">
-                            <div class="custom-split-header mb-3">
-                                <h6>Custom Shares</h6>
-                                <small class="text-muted" id="customSplitDescription">
-                                    Enter base amounts for selected participants. The system will automatically calculate total shares including equal distribution of discount, tax, and GST.
-                                </small>
-                                <div class="mt-2" id="dynamicSplitInfo" style="display: none;">
-                                    <small class="text-muted">
-                                        • Equal discount per person: <span id="dynamicDiscountPerPerson" class="fw-bold">$0.00</span><br>
-                                        • Equal service tax per person: <span id="dynamicServiceTaxPerPerson" class="fw-bold">$0.00</span><br>
-                                        • Equal GST per person: <span id="dynamicGstPerPerson" class="fw-bold">$0.00</span>
-                                    </small>
-                                </div>
-                            </div>
-                            {% for member in group.members %}
-                            <div class="row align-items-center mb-2 participant-row" data-member="{{ member }}">
-                                <div class="col-md-6">
-                                    <label class="form-label-enhanced">
-                                        <i class="fas fa-user me-2"></i>{{ member }}
-                                    </label>
-                                </div>
-                                <div class="col-md-6">
-                                    <input type="number" class="form-control-enhanced share-input" 
-                                           name="share_{{ member }}" step="0.01" min="0" 
-                                           value="0" placeholder="Base amount"
-                                           oninput="handleCustomSplitInput()">
-                                    <small class="text-muted member-breakdown" id="breakdown_{{ member }}" style="display: none;">
-                                        Total: <span class="fw-bold">$0.00</span>
-                                    </small>
-                                </div>
-                            </div>
-                            {% endfor %}
-                            <div class="custom-split-validation mt-3">
-                                <div class="alert alert-warning py-2" id="splitValidation" style="display: none;">
-                                    <i class="fas fa-exclamation-triangle me-2"></i>
-                                    <span id="validationMessage"></span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+    <div class="custom-split-header mb-3">
+        <h6>Custom Shares</h6>
+        <small class="text-muted" id="customSplitDescription">
+            Enter <strong>base amounts</strong> for selected participants. The system will automatically calculate total shares including equal distribution of discount, tax, and GST.
+        </small>
+        <div class="mt-2" id="dynamicSplitInfo" style="display: none;">
+            <small class="text-muted">
+                • Equal discount per person: <span id="dynamicDiscountPerPerson" class="fw-bold">$0.00</span><br>
+                • Equal service tax per person: <span id="dynamicServiceTaxPerPerson" class="fw-bold">$0.00</span><br>
+                • Equal GST per person: <span id="dynamicGstPerPerson" class="fw-bold">$0.00</span>
+            </small>
+        </div>
+    </div>
+    {% for member in group.members %}
+    <div class="row align-items-center mb-2 participant-row" data-member="{{ member }}">
+        <div class="col-md-6">
+            <label class="form-label-enhanced">
+                <i class="fas fa-user me-2"></i>{{ member }}
+            </label>
+        </div>
+        <div class="col-md-6">
+            <input type="number" class="form-control-enhanced share-input" 
+                   name="share_{{ member }}" step="0.01" min="0" 
+                   value="0" placeholder="Enter base amount"
+                   oninput="handleCustomSplitInput()">
+            <small class="text-muted member-breakdown" id="breakdown_{{ member }}" style="display: none;">
+                Total: <span class="fw-bold">$0.00</span>
+            </small>
+        </div>
+    </div>
+    {% endfor %}
+    <div class="custom-split-validation mt-3">
+        <div class="alert alert-warning py-2" id="splitValidation" style="display: none;">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <span id="validationMessage"></span>
+        </div>
+    </div>
+</div>
 
                     <!-- Action Buttons -->
                     <div class="form-actions">
@@ -715,7 +714,7 @@ function calculateCustomSplit() {
     let hasManualInput = false;
     let memberShares = [];
     
-    // First pass: calculate base amounts and check for manual input
+    // First pass: collect base amounts and check for manual input
     document.querySelectorAll('.share-input').forEach(input => {
         const memberRow = input.closest('.participant-row');
         const member = memberRow.getAttribute('data-member');
@@ -737,7 +736,7 @@ function calculateCustomSplit() {
         }
     });
     
-    // If no manual input or totals don't match, auto-distribute
+    // If no manual input or base amounts don't match total base, auto-distribute base
     if (!hasManualInput || Math.abs(totalBaseEntered - baseAmount) > 0.01) {
         // Auto-distribute base amount equally among participants
         const equalBaseAmount = baseAmount / participantCount;
@@ -753,15 +752,16 @@ function calculateCustomSplit() {
         totalBaseEntered = memberShares.reduce((sum, share) => sum + share.baseAmount, 0);
     }
     
-    // Calculate total amount that should be distributed
+    // Calculate total amount that should be distributed (for validation)
     const totalAmount = baseAmount - discountAmount + serviceTaxAmount + gstAmount;
     
-    // Calculate each member's share with precision adjustment
+    // Calculate each member's TOTAL share (not base amount)
     let calculatedTotal = 0;
     const finalShares = [];
     
-    // Calculate initial shares
+    // Calculate individual totals
     memberShares.forEach(share => {
+        // CORRECT CALCULATION: Base + Service Tax + GST - Discount
         const memberTotalShare = share.baseAmount + serviceTaxPerPerson + gstPerPerson - discountPerPerson;
         const finalShare = Math.max(0, memberTotalShare);
         
@@ -775,22 +775,23 @@ function calculateCustomSplit() {
         calculatedTotal += finalShare;
     });
     
-    // Adjust for rounding differences to ensure total matches exactly
+    // Adjust for any rounding differences
     const difference = totalAmount - calculatedTotal;
-    if (Math.abs(difference) > 0.01) {
-        // Distribute the difference to the largest share to minimize impact
-        const largestShareIndex = finalShares.reduce((maxIndex, share, index, arr) => 
-            share.share > arr[maxIndex].share ? index : maxIndex, 0);
-        
-        finalShares[largestShareIndex].share += difference;
-        calculatedTotal += difference;
+    if (Math.abs(difference) > 0.001) {
+        // Distribute the difference to maintain accuracy
+        const adjustmentPerPerson = difference / participantCount;
+        finalShares.forEach(item => {
+            item.share += adjustmentPerPerson;
+        });
+        calculatedTotal = finalShares.reduce((sum, item) => sum + item.share, 0);
     }
     
-    // Apply final shares and update displays
+    // Apply final TOTAL shares (not base amounts)
     finalShares.forEach(item => {
+        // Store the calculated TOTAL in the input field
         item.input.value = item.share.toFixed(2);
         
-        // Update breakdown display
+        // Update breakdown display with correct calculation
         const breakdownElement = document.getElementById(`breakdown_${item.member}`);
         if (breakdownElement) {
             breakdownElement.innerHTML = 
@@ -803,10 +804,24 @@ function calculateCustomSplit() {
         }
     });
     
-    // Update the total amount display to reflect any adjustments
-    document.getElementById('totalAmountDisplay').textContent = `$${calculatedTotal.toFixed(2)}`;
+    // Update the form to store base amounts separately for submission
+    updateBaseAmountsForSubmission(memberShares);
 }
 
+// Add this new function to store base amounts for form submission
+function updateBaseAmountsForSubmission(memberShares) {
+    memberShares.forEach(item => {
+        // Create or update hidden input for base amount
+        let baseInput = document.querySelector(`input[name="base_${item.member}"]`);
+        if (!baseInput) {
+            baseInput = document.createElement('input');
+            baseInput.type = 'hidden';
+            baseInput.name = `base_${item.member}`;
+            document.getElementById('expenseForm').appendChild(baseInput);
+        }
+        baseInput.value = item.baseAmount.toFixed(2);
+    });
+}
 function validateCustomSplit() {
     if (!document.getElementById('split_custom').checked) return;
     
