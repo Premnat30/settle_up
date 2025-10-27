@@ -1,12 +1,12 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response, session
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 import json
 import csv
 from io import StringIO
 import smtplib
-from email.mime.text import MimeText
-from email.mime.multipart import MimeMultipart
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 import secrets
 import hashlib
 import uuid
@@ -14,7 +14,7 @@ import uuid
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-12345')
 
-# Email configuration
+# Email configuration - use environment variables
 app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
 app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587))
 app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', '')
@@ -64,8 +64,8 @@ def verify_password(stored_password, provided_password):
 def send_verification_email(email, verification_token, username):
     """Send verification email to user"""
     try:
-        # Create verification link
-        verification_link = f"http://localhost:5000/verify_email/{verification_token}"
+        # For Render deployment, use the actual URL
+        verification_link = f"{request.host_url}verify_email/{verification_token}"
         
         # Email content
         subject = "Verify Your Friendz Share Account"
@@ -112,13 +112,13 @@ def send_verification_email(email, verification_token, username):
         """
         
         # Create message
-        msg = MimeMultipart()
+        msg = MIMEMultipart()
         msg['From'] = app.config['MAIL_USERNAME']
         msg['To'] = email
         msg['Subject'] = subject
         
         # Add HTML content
-        msg.attach(MimeText(html_content, 'html'))
+        msg.attach(MIMEText(html_content, 'html'))
         
         # Send email
         with smtplib.SMTP(app.config['MAIL_SERVER'], app.config['MAIL_PORT']) as server:
@@ -134,7 +134,7 @@ def send_verification_email(email, verification_token, username):
 def send_password_reset_email(email, reset_token, username):
     """Send password reset email to user"""
     try:
-        reset_link = f"http://localhost:5000/reset_password/{reset_token}"
+        reset_link = f"{request.host_url}reset_password/{reset_token}"
         
         subject = "Reset Your Friendz Share Password"
         
@@ -181,11 +181,11 @@ def send_password_reset_email(email, reset_token, username):
         </html>
         """
         
-        msg = MimeMultipart()
+        msg = MIMEMultipart()
         msg['From'] = app.config['MAIL_USERNAME']
         msg['To'] = email
         msg['Subject'] = subject
-        msg.attach(MimeText(html_content, 'html'))
+        msg.attach(MIMEText(html_content, 'html'))
         
         with smtplib.SMTP(app.config['MAIL_SERVER'], app.config['MAIL_PORT']) as server:
             server.starttls()
@@ -197,7 +197,8 @@ def send_password_reset_email(email, reset_token, username):
         print(f"Error sending reset email: {e}")
         return False
 
-# Existing data loading/saving functions remain the same...
+# ... (Keep all your existing data loading/saving functions from your original app.py)
+
 def load_data():
     """Load data from file with proper error handling"""
     try:
@@ -250,7 +251,133 @@ def save_data(data):
         print(f"Error saving data: {e}")
         return False
 
-# ... (Keep all your existing group and expense management functions)
+def get_next_group_id():
+    data = load_data()
+    next_id = data['next_group_id']
+    data['next_group_id'] += 1
+    if save_data(data):
+        return next_id
+    return None
+
+def get_next_expense_id():
+    data = load_data()
+    
+    # Find the maximum existing expense ID
+    existing_ids = []
+    for exp_id in data.get('expenses', {}).keys():
+        try:
+            existing_ids.append(int(exp_id))
+        except (ValueError, TypeError):
+            continue
+    
+    # If no expenses exist, start from 1, else use max + 1
+    if existing_ids:
+        next_id = max(existing_ids) + 1
+    else:
+        next_id = 1
+    
+    # Update the next_expense_id counter
+    data['next_expense_id'] = next_id + 1
+    
+    if save_data(data):
+        return next_id
+    return None
+
+def update_recent_members(members_list):
+    data = load_data()
+    recent_members = data.get('recent_members', [])
+    
+    for member in members_list:
+        member_clean = member.strip()
+        if member_clean and member_clean not in recent_members:
+            # Remove if already exists to avoid duplicates
+            if member_clean in recent_members:
+                recent_members.remove(member_clean)
+            recent_members.insert(0, member_clean)
+    
+    # Keep only last 10 recent members
+    data['recent_members'] = recent_members[:10]
+    save_data(data)
+
+def calculate_total_amount(base_amount, discount_amount=0, service_tax_amount=0, gst_amount=0):
+    """Calculate total amount with fixed discount, tax, and GST amounts"""
+    try:
+        base_amount = float(base_amount)
+        discount_amount = float(discount_amount)
+        service_tax_amount = float(service_tax_amount)
+        gst_amount = float(gst_amount)
+        
+        # Validate inputs
+        if base_amount < 0 or discount_amount < 0 or service_tax_amount < 0 or gst_amount < 0:
+            return None
+        
+        # Calculate amount after discount
+        amount_after_discount = base_amount - discount_amount
+        
+        # Ensure amount after discount doesn't go negative
+        if amount_after_discount < 0:
+            amount_after_discount = 0
+        
+        # Total amount: Base - Discount + Service Tax + GST
+        total_amount = amount_after_discount + service_tax_amount + gst_amount
+        
+        return {
+            'base_amount': round(base_amount, 2),
+            'discount_amount': round(discount_amount, 2),
+            'amount_after_discount': round(amount_after_discount, 2),
+            'service_tax_amount': round(service_tax_amount, 2),
+            'gst_amount': round(gst_amount, 2),
+            'total_amount': round(total_amount, 2)
+        }
+    except (ValueError, TypeError):
+        return None
+
+def simplify_debts(balances):
+    """Simplify debts using minimum transactions"""
+    try:
+        creditors = []
+        debtors = []
+        
+        # Separate creditors and debtors
+        for member, balance in balances.items():
+            if balance > 0.01:  # Creditors (using epsilon for float comparison)
+                creditors.append((member, balance))
+            elif balance < -0.01:  # Debtors
+                debtors.append((member, -balance))
+        
+        settlements = []
+        
+        # Sort by amount (largest first for better optimization)
+        creditors.sort(key=lambda x: x[1], reverse=True)
+        debtors.sort(key=lambda x: x[1], reverse=True)
+        
+        # Settle debts
+        while creditors and debtors:
+            creditor, credit_amt = creditors[0]
+            debtor, debt_amt = debtors[0]
+            
+            settlement_amt = min(credit_amt, debt_amt)
+            
+            settlements.append({
+                'from': debtor,
+                'to': creditor,
+                'amount': round(settlement_amt, 2)
+            })
+            
+            # Update amounts
+            if credit_amt > debt_amt:
+                creditors[0] = (creditor, credit_amt - debt_amt)
+                debtors.pop(0)
+            elif debt_amt > credit_amt:
+                debtors[0] = (debtor, debt_amt - credit_amt)
+                creditors.pop(0)
+            else:
+                creditors.pop(0)
+                debtors.pop(0)
+        
+        return settlements
+    except Exception:
+        return []
 
 # Authentication Routes
 @app.route('/login', methods=['GET', 'POST'])
@@ -323,7 +450,7 @@ def register():
             'verified': False,
             'verification_token': verification_token,
             'created_at': datetime.now().isoformat(),
-            'profile_visibility': 'private'  # private, shared, public
+            'profile_visibility': 'private'
         }
         
         users_data['users'][email] = user_data
@@ -379,7 +506,7 @@ def forgot_password():
             else:
                 flash('Error processing request. Please try again.', 'error')
         else:
-            flash('If this email exists, reset instructions will be sent.', 'success')  # Don't reveal if email exists
+            flash('If this email exists, reset instructions will be sent.', 'success')
         
         return redirect(url_for('login'))
     
@@ -508,10 +635,10 @@ def create_group():
                 'id': group_id,
                 'name': group_name,
                 'members': member_names,
-                'owner_id': session['user_id'],  # Associate with current user
+                'owner_id': session['user_id'],
                 'owner_email': session['user_email'],
-                'shared_with': [],  # List of user IDs who can access this group
-                'share_token': secrets.token_urlsafe(16),  # Unique token for sharing
+                'shared_with': [],
+                'share_token': secrets.token_urlsafe(16),
                 'created_at': datetime.now().isoformat(),
                 'expenses': []
             }
@@ -561,7 +688,7 @@ def share_group(group_id):
             flash('You can only share groups you own.', 'error')
             return redirect(url_for('group_detail', group_id=group_id))
         
-        share_link = f"http://localhost:5000/join_group/{group['share_token']}"
+        share_link = f"{request.host_url}join_group/{group['share_token']}"
         
         # Create WhatsApp share link
         whatsapp_text = f"Join my expense sharing group '{group['name']}' on Friendz Share: {share_link}"
@@ -640,9 +767,9 @@ def join_group(token):
         flash('Error joining group. Please try again.', 'error')
         return redirect(url_for('index'))
 
-# ... (Keep all your existing routes, but add user_id checks where appropriate)
+# ... (Keep all your existing routes for group_detail, add_expense, settle_up, etc.)
+# Make sure to add user authentication checks to all protected routes
 
-# Update group_detail and other routes to check user access
 @app.route('/group/<int:group_id>')
 def group_detail(group_id):
     if 'user_id' not in session:
@@ -663,7 +790,65 @@ def group_detail(group_id):
             flash('You do not have access to this group.', 'error')
             return redirect(url_for('index'))
         
-        # ... rest of your existing group_detail code
+        # Ensure group has all required fields
+        if 'id' not in group:
+            group['id'] = group_id
+        if 'members' not in group:
+            group['members'] = []
+        if 'expenses' not in group:
+            group['expenses'] = []
+        if 'created_at' not in group:
+            group['created_at'] = datetime.now().isoformat()
+        
+        # Get expenses for this group
+        group_expenses = []
+        
+        for exp_id in group.get('expenses', []):
+            # Try both string and integer keys
+            expense_key_str = str(exp_id)
+            expense_key_int = exp_id
+            
+            expense = None
+            if expense_key_str in data.get('expenses', {}):
+                expense = data['expenses'][expense_key_str]
+            elif isinstance(expense_key_int, int) and str(expense_key_int) in data.get('expenses', {}):
+                expense = data['expenses'][str(expense_key_int)]
+            
+            if expense and expense.get('group_id') == group_id:
+                try:
+                    # Ensure expense has all required fields with safe defaults
+                    if 'date' not in expense:
+                        expense['date'] = datetime.now().isoformat()
+                    if 'visit_date' not in expense:
+                        expense['visit_date'] = expense['date'][:10]
+                    if 'base_amount' not in expense:
+                        expense['base_amount'] = expense.get('amount', 0)
+                    if 'discount_amount' not in expense:
+                        expense['discount_amount'] = 0
+                    if 'service_tax_amount' not in expense:
+                        expense['service_tax_amount'] = 0
+                    if 'gst_amount' not in expense:
+                        expense['gst_amount'] = 0
+                    if 'participants' not in expense:
+                        expense['participants'] = group['members']
+                    
+                    # Safe date parsing
+                    try:
+                        expense['date_display'] = datetime.fromisoformat(expense['date']).strftime('%Y-%m-%d %H:%M')
+                    except (ValueError, TypeError):
+                        expense['date_display'] = "Unknown date"
+                    
+                    expense['visit_date_display'] = expense['visit_date'][:10]
+                    group_expenses.append(expense)
+                except (ValueError, KeyError) as e:
+                    print(f"Error processing expense {exp_id}: {e}")
+                    continue
+        
+        # Sort expenses by date (newest first)
+        group_expenses.sort(key=lambda x: x.get('date', ''), reverse=True)
+        
+        # Calculate total spent
+        total_spent = sum(expense.get('amount', 0) for expense in group_expenses)
         
         return render_template('group_detail.html', 
                              group=group, 
@@ -675,9 +860,11 @@ def group_detail(group_id):
         flash('Error loading group details. Please try again.', 'error')
         return redirect(url_for('index'))
 
+# ... (Include all your other existing routes: add_expense, settle_up, delete_group, download_csv, etc.)
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     # Initialize data files on startup
     load_data()
     load_users()
-    app.run(host='0.0.0.0', port=port, debug=True)
+    app.run(host='0.0.0.0', port=port, debug=False)
