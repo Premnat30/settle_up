@@ -137,15 +137,27 @@
     </style>
 </head>
 <body>
-    <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-light bg-white py-3">
-        <div class="container">
-            <a class="navbar-brand nav-brand" href="{{ url_for('index') }}">
-                <i class="fas fa-handshake me-2"></i>
-                Friendz Share
-            </a>
+   <!-- Updated Navigation -->
+<nav class="navbar navbar-expand-lg navbar-light bg-white py-3">
+    <div class="container">
+        <a class="navbar-brand nav-brand" href="{{ url_for('index') }}">
+            <i class="fas fa-handshake me-2"></i>
+            Friendz Share
+        </a>
+        <div class="navbar-nav ms-auto">
+            <div class="nav-item dropdown">
+                <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
+                    <i class="fas fa-user-circle me-1"></i>Hello, {{ user_name }}!
+                </a>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="#"><i class="fas fa-user me-2"></i>Profile</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
+                </ul>
+            </div>
         </div>
-    </nav>
+    </div>
+</nav>
 
     <!-- Hero Section -->
     <section class="apple-hero">
@@ -302,6 +314,15 @@
             </div>
         </div>
     </section>
+
+    <div class="d-flex gap-2">
+    <a href="{{ url_for('group_detail', group_id=group.id) }}" class="btn btn-outline-primary btn-sm flex-fill">
+        <i class="fas fa-eye me-1"></i>View
+    </a>
+    <a href="{{ url_for('share_group', group_id=group.id) }}" class="btn btn-success btn-sm flex-fill">
+        <i class="fas fa-share-alt me-1"></i>Share
+    </a>
+</div>
 
     <!-- Footer -->
     <footer class="bg-dark text-white py-5 mt-5">
