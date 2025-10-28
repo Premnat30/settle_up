@@ -666,9 +666,15 @@ def index():
     except Exception as e:
         print(f"Error in index route: {e}")
         flash('Error loading data. Please try again.', 'error')
-        return render_template('index.html', groups=[], total_groups=0, total_expenses=0, total_spent=0, user_name=session.get('user_name', 'Friend'))
-
-# === ADD MISSING GROUP MANAGEMENT ROUTES ===
+        # Make sure we pass all required variables even in error case
+        return render_template('index.html', 
+                             groups=[], 
+                             total_groups=0, 
+                             total_expenses=0, 
+                             total_spent=0, 
+                             user_name=session.get('user_name', 'Friend'))
+    
+    # === ADD MISSING GROUP MANAGEMENT ROUTES ===
 
 @app.route('/create_group', methods=['GET', 'POST'])
 def create_group():
