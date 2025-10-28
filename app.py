@@ -10,6 +10,7 @@ from email.mime.multipart import MIMEMultipart
 import secrets
 import hashlib
 import uuid
+import re
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-12345')
@@ -24,6 +25,11 @@ app.config['MAIL_USE_TLS'] = True
 # Simple file-based storage for persistence
 DATA_FILE = 'data.json'
 USERS_FILE = 'users.json'
+
+def is_valid_email(email):
+    """Validate email format"""
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return re.match(pattern, email) is not None
 
 def load_users():
     """Load users data from file"""
@@ -129,8 +135,8 @@ def send_verification_email(email, verification_token, username):
         # Add HTML content
         msg.attach(MIMEText(html_content, 'html'))
         
-        # Send email
-        server = smtplib.SMTP(app.config['MAIL_SERVER'], app.config['MAIL_PORT'])
+        # Send email with timeout
+        server = smtplib.SMTP(app.config['MAIL_SERVER'], app.config['MAIL_PORT'], timeout=10)
         server.starttls()
         server.login(app.config['MAIL_USERNAME'], app.config['MAIL_PASSWORD'])
         server.send_message(msg)
@@ -208,7 +214,7 @@ def send_password_reset_email(email, reset_token, username):
         msg['Subject'] = subject
         msg.attach(MIMEText(html_content, 'html'))
         
-        server = smtplib.SMTP(app.config['MAIL_SERVER'], app.config['MAIL_PORT'])
+        server = smtplib.SMTP(app.config['MAIL_SERVER'], app.config['MAIL_PORT'], timeout=10)
         server.starttls()
         server.login(app.config['MAIL_USERNAME'], app.config['MAIL_PASSWORD'])
         server.send_message(msg)
@@ -223,7 +229,7 @@ def send_password_reset_email(email, reset_token, username):
         print(f"EMAIL FAILED - PASSWORD RESET LINK for {username} ({email}): {reset_link}")
         return False
 
-# ... (Keep all your existing data loading/saving functions)
+
 
 def load_data():
     """Load data from file with proper error handling"""
@@ -276,6 +282,7 @@ def save_data(data):
     except Exception as e:
         print(f"Error saving data: {e}")
         return False
+
 
 def get_next_group_id():
     data = load_data()
@@ -453,6 +460,11 @@ def register():
             flash('Please fill in all fields.', 'error')
             return redirect(url_for('login'))
         
+        # Validate email format
+        if not is_valid_email(email):
+            flash('Please enter a valid email address.', 'error')
+            return redirect(url_for('login'))
+        
         if password != confirm_password:
             flash('Passwords do not match.', 'error')
             return redirect(url_for('login'))
@@ -485,12 +497,17 @@ def register():
         users_data['users'][email] = user_data
         
         if save_users(users_data):
-            # Send verification email
-            if send_verification_email(email, verification_token, username):
-                flash('Registration successful! Please check your email to verify your account.', 'success')
-            else:
-                # If email fails, still create account but warn user
-                flash('Registration successful! But we could not send verification email. Please contact support to verify your account.', 'warning')
+            # Send verification email (non-blocking)
+            try:
+                if send_verification_email(email, verification_token, username):
+                    flash('Registration successful! Please check your email to verify your account.', 'success')
+                else:
+                    # If email fails, still create account but warn user
+                    flash('Registration successful! But we could not send verification email. Please contact support to verify your account.', 'warning')
+            except Exception as e:
+                print(f"Error in email sending: {e}")
+                flash('Registration successful! Account created but email verification failed.', 'warning')
+            
             return redirect(url_for('login'))
         else:
             flash('Error creating account. Please try again.', 'error')
@@ -525,6 +542,11 @@ def forgot_password():
     if request.method == 'POST':
         email = request.form['email'].strip().lower()
         
+        # Validate email format
+        if not is_valid_email(email):
+            flash('Please enter a valid email address.', 'error')
+            return redirect(url_for('login'))
+        
         users_data = load_users()
         user = users_data['users'].get(email)
         
@@ -534,9 +556,13 @@ def forgot_password():
             user['reset_token_expiry'] = (datetime.now() + timedelta(hours=1)).isoformat()
             
             if save_users(users_data):
-                if send_password_reset_email(email, reset_token, user['username']):
-                    flash('Password reset instructions sent to your email.', 'success')
-                else:
+                try:
+                    if send_password_reset_email(email, reset_token, user['username']):
+                        flash('Password reset instructions sent to your email.', 'success')
+                    else:
+                        flash('Error sending reset email. Please try again.', 'error')
+                except Exception as e:
+                    print(f"Error in password reset email: {e}")
                     flash('Error sending reset email. Please try again.', 'error')
             else:
                 flash('Error processing request. Please try again.', 'error')
@@ -642,14 +668,10 @@ def index():
         flash('Error loading data. Please try again.', 'error')
         return render_template('index.html', groups=[], total_groups=0, total_expenses=0, total_spent=0, user_name=session.get('user_name', 'Friend'))
 
-# ... (Keep all your other routes as before)
 
 # Debug route to check email configuration
 @app.route('/debug/email')
 def debug_email():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    
     email_config = {
         'MAIL_SERVER': app.config['MAIL_SERVER'],
         'MAIL_PORT': app.config['MAIL_PORT'],
@@ -664,9 +686,17 @@ def debug_email():
 @app.route('/debug/users')
 def debug_users():
     users_data = load_users()
+    user_list = {}
+    for email, user in users_data.get('users', {}).items():
+        user_list[email] = {
+            'username': user.get('username'),
+            'verified': user.get('verified', False),
+            'created_at': user.get('created_at')
+        }
+    
     return jsonify({
         'total_users': len(users_data.get('users', {})),
-        'users': list(users_data.get('users', {}).keys())
+        'users': user_list
     })
 
 if __name__ == '__main__':
@@ -674,4 +704,4 @@ if __name__ == '__main__':
     # Initialize data files on startup
     load_data()
     load_users()
-    app.run(host='0.0.0.0', port=port, debug=True)
+    app.run(host='0.0.0.0', port=port, debug=False)
