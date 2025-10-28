@@ -406,7 +406,30 @@
                     </form>
                 </div>
             </div>
-            
+            <div class="modal fade" id="forgotPasswordModal" tabindex="-1">
+   
+   
+                <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Reset Password</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form method="POST" action="{{ url_for('forgot_password') }}">
+                    <div class="form-floating mb-3">
+                        <input type="email" class="form-control" id="forgotEmail" name="email" placeholder="name@example.com" required>
+                        <label for="forgotEmail">Enter your email address</label>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Send Reset Instructions</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+            <div class="text-center mt-3">
+    <a href="#" data-bs-toggle="modal" data-bs-target="#forgotPasswordModal" class="text-decoration-none">Forgot your password?</a>
+</div>
             <div class="mt-4">
                 <h6 class="text-center mb-3">Why Join Friendz Share?</h6>
                 

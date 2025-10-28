@@ -36,7 +36,8 @@ def load_users():
         
         with open(USERS_FILE, 'r') as f:
             return json.load(f)
-    except:
+    except Exception as e:
+        print(f"Error loading users: {e}")
         return {'users': {}}
 
 def save_users(data):
@@ -45,7 +46,8 @@ def save_users(data):
         with open(USERS_FILE, 'w') as f:
             json.dump(data, f, indent=2)
         return True
-    except:
+    except Exception as e:
+        print(f"Error saving users: {e}")
         return False
 
 def hash_password(password):
@@ -64,6 +66,13 @@ def verify_password(stored_password, provided_password):
 def send_verification_email(email, verification_token, username):
     """Send verification email to user"""
     try:
+        # Check if email is configured
+        if not app.config['MAIL_USERNAME'] or not app.config['MAIL_PASSWORD']:
+            print("Email not configured - printing verification link to console")
+            verification_link = f"{request.host_url}verify_email/{verification_token}"
+            print(f"VERIFICATION LINK for {username} ({email}): {verification_link}")
+            return True
+            
         # For Render deployment, use the actual URL
         verification_link = f"{request.host_url}verify_email/{verification_token}"
         
@@ -121,19 +130,31 @@ def send_verification_email(email, verification_token, username):
         msg.attach(MIMEText(html_content, 'html'))
         
         # Send email
-        with smtplib.SMTP(app.config['MAIL_SERVER'], app.config['MAIL_PORT']) as server:
-            server.starttls()
-            server.login(app.config['MAIL_USERNAME'], app.config['MAIL_PASSWORD'])
-            server.send_message(msg)
+        server = smtplib.SMTP(app.config['MAIL_SERVER'], app.config['MAIL_PORT'])
+        server.starttls()
+        server.login(app.config['MAIL_USERNAME'], app.config['MAIL_PASSWORD'])
+        server.send_message(msg)
+        server.quit()
         
+        print(f"Verification email sent to {email}")
         return True
     except Exception as e:
         print(f"Error sending email: {e}")
+        # Fallback: print verification link to console
+        verification_link = f"{request.host_url}verify_email/{verification_token}"
+        print(f"EMAIL FAILED - VERIFICATION LINK for {username} ({email}): {verification_link}")
         return False
 
 def send_password_reset_email(email, reset_token, username):
     """Send password reset email to user"""
     try:
+        # Check if email is configured
+        if not app.config['MAIL_USERNAME'] or not app.config['MAIL_PASSWORD']:
+            print("Email not configured - printing reset link to console")
+            reset_link = f"{request.host_url}reset_password/{reset_token}"
+            print(f"PASSWORD RESET LINK for {username} ({email}): {reset_link}")
+            return True
+            
         reset_link = f"{request.host_url}reset_password/{reset_token}"
         
         subject = "Reset Your Friendz Share Password"
@@ -187,17 +208,22 @@ def send_password_reset_email(email, reset_token, username):
         msg['Subject'] = subject
         msg.attach(MIMEText(html_content, 'html'))
         
-        with smtplib.SMTP(app.config['MAIL_SERVER'], app.config['MAIL_PORT']) as server:
-            server.starttls()
-            server.login(app.config['MAIL_USERNAME'], app.config['MAIL_PASSWORD'])
-            server.send_message(msg)
+        server = smtplib.SMTP(app.config['MAIL_SERVER'], app.config['MAIL_PORT'])
+        server.starttls()
+        server.login(app.config['MAIL_USERNAME'], app.config['MAIL_PASSWORD'])
+        server.send_message(msg)
+        server.quit()
         
+        print(f"Password reset email sent to {email}")
         return True
     except Exception as e:
         print(f"Error sending reset email: {e}")
+        # Fallback: print reset link to console
+        reset_link = f"{request.host_url}reset_password/{reset_token}"
+        print(f"EMAIL FAILED - PASSWORD RESET LINK for {username} ({email}): {reset_link}")
         return False
 
-# ... (Keep all your existing data loading/saving functions from your original app.py)
+# ... (Keep all your existing data loading/saving functions)
 
 def load_data():
     """Load data from file with proper error handling"""
@@ -408,10 +434,11 @@ def login():
             return redirect(url_for('index'))
         else:
             flash('Invalid email or password.', 'error')
+            return redirect(url_for('login'))
     
     return render_template('login.html')
 
-@app.route('/register', methods=['GET', 'POST'])
+@app.route('/register', methods=['POST'])
 def register():
     if request.method == 'POST':
         username = request.form['username'].strip()
@@ -419,18 +446,20 @@ def register():
         password = request.form['password']
         confirm_password = request.form['confirm_password']
         
+        print(f"Registration attempt: {username}, {email}")  # Debug log
+        
         # Validation
         if not all([username, email, password]):
             flash('Please fill in all fields.', 'error')
-            return redirect(url_for('register'))
+            return redirect(url_for('login'))
         
         if password != confirm_password:
             flash('Passwords do not match.', 'error')
-            return redirect(url_for('register'))
+            return redirect(url_for('login'))
         
         if len(password) < 6:
             flash('Password must be at least 6 characters long.', 'error')
-            return redirect(url_for('register'))
+            return redirect(url_for('login'))
         
         users_data = load_users()
         
@@ -460,32 +489,38 @@ def register():
             if send_verification_email(email, verification_token, username):
                 flash('Registration successful! Please check your email to verify your account.', 'success')
             else:
-                flash('Registration successful! But we could not send verification email. Please contact support.', 'warning')
+                # If email fails, still create account but warn user
+                flash('Registration successful! But we could not send verification email. Please contact support to verify your account.', 'warning')
             return redirect(url_for('login'))
         else:
             flash('Error creating account. Please try again.', 'error')
+            return redirect(url_for('login'))
     
-    return render_template('login.html')
+    return redirect(url_for('login'))
 
 @app.route('/verify_email/<token>')
 def verify_email(token):
     users_data = load_users()
+    user_found = False
     
     for email, user in users_data['users'].items():
         if user.get('verification_token') == token:
             user['verified'] = True
             user.pop('verification_token', None)
-            
-            if save_users(users_data):
-                flash('Email verified successfully! You can now login.', 'success')
-            else:
-                flash('Error verifying email. Please try again.', 'error')
-            return redirect(url_for('login'))
+            user_found = True
+            break
     
-    flash('Invalid or expired verification link.', 'error')
+    if user_found:
+        if save_users(users_data):
+            flash('Email verified successfully! You can now login.', 'success')
+        else:
+            flash('Error verifying email. Please try again.', 'error')
+    else:
+        flash('Invalid or expired verification link.', 'error')
+    
     return redirect(url_for('login'))
 
-@app.route('/forgot_password', methods=['GET', 'POST'])
+@app.route('/forgot_password', methods=['POST'])
 def forgot_password():
     if request.method == 'POST':
         email = request.form['email'].strip().lower()
@@ -493,7 +528,7 @@ def forgot_password():
         users_data = load_users()
         user = users_data['users'].get(email)
         
-        if user:
+        if user and user.get('verified', False):
             reset_token = secrets.token_urlsafe(32)
             user['reset_token'] = reset_token
             user['reset_token_expiry'] = (datetime.now() + timedelta(hours=1)).isoformat()
@@ -506,11 +541,12 @@ def forgot_password():
             else:
                 flash('Error processing request. Please try again.', 'error')
         else:
-            flash('If this email exists, reset instructions will be sent.', 'success')
+            # Don't reveal if email exists for security
+            flash('If this email exists and is verified, reset instructions will be sent.', 'success')
         
         return redirect(url_for('login'))
     
-    return render_template('login.html')
+    return redirect(url_for('login'))
 
 @app.route('/reset_password/<token>', methods=['GET', 'POST'])
 def reset_password(token):
@@ -518,6 +554,7 @@ def reset_password(token):
     
     # Find user with valid reset token
     user = None
+    user_email = None
     for email, user_data in users_data['users'].items():
         if (user_data.get('reset_token') == token and 
             user_data.get('reset_token_expiry') and 
@@ -605,266 +642,36 @@ def index():
         flash('Error loading data. Please try again.', 'error')
         return render_template('index.html', groups=[], total_groups=0, total_expenses=0, total_spent=0, user_name=session.get('user_name', 'Friend'))
 
-# Update create_group route to associate with user
-@app.route('/create_group', methods=['GET', 'POST'])
-def create_group():
+# ... (Keep all your other routes as before)
+
+# Debug route to check email configuration
+@app.route('/debug/email')
+def debug_email():
     if 'user_id' not in session:
         return redirect(url_for('login'))
     
-    if request.method == 'POST':
-        try:
-            group_name = request.form['group_name'].strip()
-            member_names = [name.strip() for name in request.form['members'].split(',') if name.strip()]
-            
-            if not group_name:
-                flash('Please enter a group name', 'error')
-                return redirect(url_for('create_group'))
-            
-            if len(member_names) < 2:
-                flash('Please add at least 2 members', 'error')
-                return redirect(url_for('create_group'))
-            
-            group_id = get_next_group_id()
-            if group_id is None:
-                flash('Error creating group. Please try again.', 'error')
-                return redirect(url_for('create_group'))
-            
-            data = load_data()
-            
-            group = {
-                'id': group_id,
-                'name': group_name,
-                'members': member_names,
-                'owner_id': session['user_id'],
-                'owner_email': session['user_email'],
-                'shared_with': [],
-                'share_token': secrets.token_urlsafe(16),
-                'created_at': datetime.now().isoformat(),
-                'expenses': []
-            }
-            
-            data['groups'][str(group_id)] = group
-            
-            # Update recent members
-            update_recent_members(member_names)
-            
-            if save_data(data):
-                flash(f'Group "{group_name}" created successfully!', 'success')
-                return redirect(url_for('group_detail', group_id=group_id))
-            else:
-                flash('Error saving group. Please try again.', 'error')
-                return redirect(url_for('create_group'))
-                
-        except Exception as e:
-            print(f"Error creating group: {e}")
-            flash(f'Error creating group: Please try again.', 'error')
-            return redirect(url_for('create_group'))
+    email_config = {
+        'MAIL_SERVER': app.config['MAIL_SERVER'],
+        'MAIL_PORT': app.config['MAIL_PORT'],
+        'MAIL_USERNAME_set': bool(app.config['MAIL_USERNAME']),
+        'MAIL_PASSWORD_set': bool(app.config['MAIL_PASSWORD']),
+        'MAIL_USE_TLS': app.config['MAIL_USE_TLS']
+    }
     
-    # Load recent members for suggestions
-    try:
-        data = load_data()
-        recent_members = data.get('recent_members', [])
-    except:
-        recent_members = []
-    
-    return render_template('create_group.html', recent_members=recent_members)
+    return jsonify(email_config)
 
-# Add group sharing functionality
-@app.route('/group/<int:group_id>/share')
-def share_group(group_id):
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    
-    try:
-        data = load_data()
-        group = data['groups'].get(str(group_id))
-        
-        if not group:
-            flash('Group not found', 'error')
-            return redirect(url_for('index'))
-        
-        # Check if user owns the group
-        if group.get('owner_id') != session['user_id']:
-            flash('You can only share groups you own.', 'error')
-            return redirect(url_for('group_detail', group_id=group_id))
-        
-        share_link = f"{request.host_url}join_group/{group['share_token']}"
-        
-        # Create WhatsApp share link
-        whatsapp_text = f"Join my expense sharing group '{group['name']}' on Friendz Share: {share_link}"
-        whatsapp_link = f"https://wa.me/?text={whatsapp_text}"
-        
-        # Create email share content
-        email_subject = f"Join my expense sharing group: {group['name']}"
-        email_body = f"""
-        Hi!
-
-        I've created an expense sharing group "{group['name']}" on Friendz Share and I'd like you to join.
-
-        Click the link below to join the group:
-        {share_link}
-
-        With Friendz Share, we can easily track and split expenses together.
-
-        Looking forward to sharing expenses with you!
-
-        Best regards,
-        {session['user_name']}
-        """
-        
-        return render_template('share_group.html', 
-                             group=group, 
-                             share_link=share_link,
-                             whatsapp_link=whatsapp_link,
-                             email_subject=email_subject,
-                             email_body=email_body)
-    except Exception as e:
-        print(f"Error sharing group: {e}")
-        flash('Error generating share link', 'error')
-        return redirect(url_for('group_detail', group_id=group_id))
-
-@app.route('/join_group/<token>')
-def join_group(token):
-    if 'user_id' not in session:
-        flash('Please login to join this group.', 'warning')
-        return redirect(url_for('login'))
-    
-    try:
-        data = load_data()
-        
-        # Find group with matching share token
-        target_group = None
-        for group_id, group in data['groups'].items():
-            if group.get('share_token') == token:
-                target_group = group
-                break
-        
-        if not target_group:
-            flash('Invalid or expired share link.', 'error')
-            return redirect(url_for('index'))
-        
-        # Check if user already has access
-        if (target_group.get('owner_id') == session['user_id'] or 
-            session['user_id'] in target_group.get('shared_with', [])):
-            flash('You already have access to this group.', 'info')
-            return redirect(url_for('group_detail', group_id=target_group['id']))
-        
-        # Add user to shared_with list
-        if 'shared_with' not in target_group:
-            target_group['shared_with'] = []
-        
-        target_group['shared_with'].append(session['user_id'])
-        
-        if save_data(data):
-            flash(f'You have joined the group "{target_group["name"]}"!', 'success')
-            return redirect(url_for('group_detail', group_id=target_group['id']))
-        else:
-            flash('Error joining group. Please try again.', 'error')
-            return redirect(url_for('index'))
-            
-    except Exception as e:
-        print(f"Error joining group: {e}")
-        flash('Error joining group. Please try again.', 'error')
-        return redirect(url_for('index'))
-
-# ... (Keep all your existing routes for group_detail, add_expense, settle_up, etc.)
-# Make sure to add user authentication checks to all protected routes
-
-@app.route('/group/<int:group_id>')
-def group_detail(group_id):
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    
-    try:
-        data = load_data()
-        group_key = str(group_id)
-        group = data['groups'].get(group_key)
-        
-        if not group:
-            flash('Group not found', 'error')
-            return redirect(url_for('index'))
-        
-        # Check if user has access to this group
-        if (group.get('owner_id') != session['user_id'] and 
-            session['user_id'] not in group.get('shared_with', [])):
-            flash('You do not have access to this group.', 'error')
-            return redirect(url_for('index'))
-        
-        # Ensure group has all required fields
-        if 'id' not in group:
-            group['id'] = group_id
-        if 'members' not in group:
-            group['members'] = []
-        if 'expenses' not in group:
-            group['expenses'] = []
-        if 'created_at' not in group:
-            group['created_at'] = datetime.now().isoformat()
-        
-        # Get expenses for this group
-        group_expenses = []
-        
-        for exp_id in group.get('expenses', []):
-            # Try both string and integer keys
-            expense_key_str = str(exp_id)
-            expense_key_int = exp_id
-            
-            expense = None
-            if expense_key_str in data.get('expenses', {}):
-                expense = data['expenses'][expense_key_str]
-            elif isinstance(expense_key_int, int) and str(expense_key_int) in data.get('expenses', {}):
-                expense = data['expenses'][str(expense_key_int)]
-            
-            if expense and expense.get('group_id') == group_id:
-                try:
-                    # Ensure expense has all required fields with safe defaults
-                    if 'date' not in expense:
-                        expense['date'] = datetime.now().isoformat()
-                    if 'visit_date' not in expense:
-                        expense['visit_date'] = expense['date'][:10]
-                    if 'base_amount' not in expense:
-                        expense['base_amount'] = expense.get('amount', 0)
-                    if 'discount_amount' not in expense:
-                        expense['discount_amount'] = 0
-                    if 'service_tax_amount' not in expense:
-                        expense['service_tax_amount'] = 0
-                    if 'gst_amount' not in expense:
-                        expense['gst_amount'] = 0
-                    if 'participants' not in expense:
-                        expense['participants'] = group['members']
-                    
-                    # Safe date parsing
-                    try:
-                        expense['date_display'] = datetime.fromisoformat(expense['date']).strftime('%Y-%m-%d %H:%M')
-                    except (ValueError, TypeError):
-                        expense['date_display'] = "Unknown date"
-                    
-                    expense['visit_date_display'] = expense['visit_date'][:10]
-                    group_expenses.append(expense)
-                except (ValueError, KeyError) as e:
-                    print(f"Error processing expense {exp_id}: {e}")
-                    continue
-        
-        # Sort expenses by date (newest first)
-        group_expenses.sort(key=lambda x: x.get('date', ''), reverse=True)
-        
-        # Calculate total spent
-        total_spent = sum(expense.get('amount', 0) for expense in group_expenses)
-        
-        return render_template('group_detail.html', 
-                             group=group, 
-                             expenses=group_expenses,
-                             total_spent=total_spent,
-                             user_name=session.get('user_name'))
-    except Exception as e:
-        print(f"Error in group_detail: {e}")
-        flash('Error loading group details. Please try again.', 'error')
-        return redirect(url_for('index'))
-
-# ... (Include all your other existing routes: add_expense, settle_up, delete_group, download_csv, etc.)
+# Debug route to check users
+@app.route('/debug/users')
+def debug_users():
+    users_data = load_users()
+    return jsonify({
+        'total_users': len(users_data.get('users', {})),
+        'users': list(users_data.get('users', {}).keys())
+    })
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     # Initialize data files on startup
     load_data()
     load_users()
-    app.run(host='0.0.0.0', port=port, debug=False)
+    app.run(host='0.0.0.0', port=port, debug=True)
