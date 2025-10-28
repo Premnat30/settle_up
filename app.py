@@ -668,6 +668,443 @@ def index():
         flash('Error loading data. Please try again.', 'error')
         return render_template('index.html', groups=[], total_groups=0, total_expenses=0, total_spent=0, user_name=session.get('user_name', 'Friend'))
 
+# === ADD MISSING GROUP MANAGEMENT ROUTES ===
+
+@app.route('/create_group', methods=['GET', 'POST'])
+def create_group():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    if request.method == 'POST':
+        try:
+            group_name = request.form['group_name'].strip()
+            member_names = [name.strip() for name in request.form['members'].split(',') if name.strip()]
+            
+            if not group_name:
+                flash('Please enter a group name', 'error')
+                return redirect(url_for('create_group'))
+            
+            if len(member_names) < 2:
+                flash('Please add at least 2 members', 'error')
+                return redirect(url_for('create_group'))
+            
+            group_id = get_next_group_id()
+            if group_id is None:
+                flash('Error creating group. Please try again.', 'error')
+                return redirect(url_for('create_group'))
+            
+            data = load_data()
+            
+            group = {
+                'id': group_id,
+                'name': group_name,
+                'members': member_names,
+                'owner_id': session['user_id'],
+                'owner_email': session['user_email'],
+                'shared_with': [],
+                'share_token': secrets.token_urlsafe(16),
+                'created_at': datetime.now().isoformat(),
+                'expenses': []
+            }
+            
+            data['groups'][str(group_id)] = group
+            
+            # Update recent members
+            update_recent_members(member_names)
+            
+            if save_data(data):
+                flash(f'Group "{group_name}" created successfully!', 'success')
+                return redirect(url_for('group_detail', group_id=group_id))
+            else:
+                flash('Error saving group. Please try again.', 'error')
+                return redirect(url_for('create_group'))
+                
+        except Exception as e:
+            print(f"Error creating group: {e}")
+            flash(f'Error creating group: Please try again.', 'error')
+            return redirect(url_for('create_group'))
+    
+    # Load recent members for suggestions
+    try:
+        data = load_data()
+        recent_members = data.get('recent_members', [])
+    except:
+        recent_members = []
+    
+    return render_template('create_group.html', recent_members=recent_members)
+
+@app.route('/group/<int:group_id>')
+def group_detail(group_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    try:
+        data = load_data()
+        group_key = str(group_id)
+        group = data['groups'].get(group_key)
+        
+        if not group:
+            flash('Group not found', 'error')
+            return redirect(url_for('index'))
+        
+        # Check if user has access to this group
+        if (group.get('owner_id') != session['user_id'] and 
+            session['user_id'] not in group.get('shared_with', [])):
+            flash('You do not have access to this group.', 'error')
+            return redirect(url_for('index'))
+        
+        # Ensure group has all required fields
+        if 'id' not in group:
+            group['id'] = group_id
+        if 'members' not in group:
+            group['members'] = []
+        if 'expenses' not in group:
+            group['expenses'] = []
+        if 'created_at' not in group:
+            group['created_at'] = datetime.now().isoformat()
+        
+        # Get expenses for this group
+        group_expenses = []
+        
+        for exp_id in group.get('expenses', []):
+            # Try both string and integer keys
+            expense_key_str = str(exp_id)
+            expense_key_int = exp_id
+            
+            expense = None
+            if expense_key_str in data.get('expenses', {}):
+                expense = data['expenses'][expense_key_str]
+            elif isinstance(expense_key_int, int) and str(expense_key_int) in data.get('expenses', {}):
+                expense = data['expenses'][str(expense_key_int)]
+            
+            if expense and expense.get('group_id') == group_id:
+                try:
+                    # Ensure expense has all required fields with safe defaults
+                    if 'date' not in expense:
+                        expense['date'] = datetime.now().isoformat()
+                    if 'visit_date' not in expense:
+                        expense['visit_date'] = expense['date'][:10]
+                    if 'base_amount' not in expense:
+                        expense['base_amount'] = expense.get('amount', 0)
+                    if 'discount_amount' not in expense:
+                        expense['discount_amount'] = 0
+                    if 'service_tax_amount' not in expense:
+                        expense['service_tax_amount'] = 0
+                    if 'gst_amount' not in expense:
+                        expense['gst_amount'] = 0
+                    if 'participants' not in expense:
+                        expense['participants'] = group['members']
+                    
+                    # Safe date parsing
+                    try:
+                        expense['date_display'] = datetime.fromisoformat(expense['date']).strftime('%Y-%m-%d %H:%M')
+                    except (ValueError, TypeError):
+                        expense['date_display'] = "Unknown date"
+                    
+                    expense['visit_date_display'] = expense['visit_date'][:10]
+                    group_expenses.append(expense)
+                except (ValueError, KeyError) as e:
+                    print(f"Error processing expense {exp_id}: {e}")
+                    continue
+        
+        # Sort expenses by date (newest first)
+        group_expenses.sort(key=lambda x: x.get('date', ''), reverse=True)
+        
+        # Calculate total spent
+        total_spent = sum(expense.get('amount', 0) for expense in group_expenses)
+        
+        return render_template('group_detail.html', 
+                             group=group, 
+                             expenses=group_expenses,
+                             total_spent=total_spent,
+                             user_name=session.get('user_name'))
+    except Exception as e:
+        print(f"Error in group_detail: {e}")
+        flash('Error loading group details. Please try again.', 'error')
+        return redirect(url_for('index'))
+
+@app.route('/group/<int:group_id>/add_expense', methods=['GET', 'POST'])
+def add_expense(group_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    try:
+        data = load_data()
+        group_key = str(group_id)
+        group = data['groups'].get(group_key)
+        
+        if not group:
+            flash('Group not found', 'error')
+            return redirect(url_for('index'))
+        
+        # Check if user has access to this group
+        if (group.get('owner_id') != session['user_id'] and 
+            session['user_id'] not in group.get('shared_with', [])):
+            flash('You do not have access to this group.', 'error')
+            return redirect(url_for('index'))
+        
+        if request.method == 'POST':
+            description = request.form['description'].strip()
+            
+            # Get tax calculation fields as FIXED AMOUNTS
+            try:
+                base_amount = float(request.form['base_amount'])
+                discount_amount = float(request.form.get('discount_amount', 0))
+                service_tax_amount = float(request.form.get('service_tax_amount', 0))
+                gst_amount = float(request.form.get('gst_amount', 0))
+                visit_date = request.form.get('visit_date', '')
+            except ValueError:
+                flash('Please enter valid numbers for amounts', 'error')
+                return redirect(url_for('add_expense', group_id=group_id))
+            
+            paid_by = request.form['paid_by']
+            split_type = request.form['split_type']
+            
+            # Get selected participants
+            participants = request.form.getlist('participants')
+            if not participants:
+                flash('Please select at least one participant', 'error')
+                return redirect(url_for('add_expense', group_id=group_id))
+            
+            if not description:
+                flash('Please enter a description', 'error')
+                return redirect(url_for('add_expense', group_id=group_id))
+            
+            if base_amount <= 0:
+                flash('Base amount must be greater than 0', 'error')
+                return redirect(url_for('add_expense', group_id=group_id))
+            
+            # Calculate total amount with FIXED amounts (no percentage calculations)
+            amount_after_discount = base_amount - discount_amount
+            total_amount = amount_after_discount + service_tax_amount + gst_amount
+            
+            # Get a new expense ID
+            expense_id = get_next_expense_id()
+            if expense_id is None:
+                flash('Error creating expense. Please try again.', 'error')
+                return redirect(url_for('add_expense', group_id=group_id))
+            
+            # Create the expense object with FIXED amounts
+            expense = {
+                'id': expense_id,
+                'description': description,
+                'base_amount': base_amount,
+                'discount_amount': discount_amount,
+                'service_tax_amount': service_tax_amount,
+                'gst_amount': gst_amount,
+                'amount': round(total_amount, 2),
+                'paid_by': paid_by,
+                'group_id': group_id,
+                'split_type': split_type,
+                'visit_date': visit_date,
+                'participants': participants,
+                'date': datetime.now().isoformat(),
+                'shares': {}
+            }
+            
+            # Calculate shares - ONLY for selected participants
+            if split_type == 'equal':
+                share_amount = round(total_amount / len(participants), 2)
+                for member in group['members']:
+                    if member in participants:
+                        expense['shares'][member] = share_amount
+                    else:
+                        expense['shares'][member] = 0
+            else:
+                # Custom split - only for selected participants
+                total_custom = 0
+                for member in group['members']:
+                    if member in participants:
+                        share_amount = float(request.form.get(f'share_{member}', 0))
+                        expense['shares'][member] = share_amount
+                        total_custom += share_amount
+                    else:
+                        expense['shares'][member] = 0
+                
+                # Validate custom split totals
+                if abs(total_custom - total_amount) > 0.01:
+                    flash(f'Custom shares (${total_custom:.2f}) must equal total amount (${total_amount:.2f})', 'error')
+                    return redirect(url_for('add_expense', group_id=group_id))
+            
+            # Save the expense with string key
+            expense_key = str(expense_id)
+            data['expenses'][expense_key] = expense
+            
+            # Add expense ID to group's expense list (ensure it's a list)
+            if 'expenses' not in group:
+                group['expenses'] = []
+            
+            # Add the new expense ID if it doesn't exist
+            if expense_id not in group['expenses']:
+                group['expenses'].append(expense_id)
+            
+            if save_data(data):
+                flash('Expense added successfully!', 'success')
+                return redirect(url_for('group_detail', group_id=group_id))
+            else:
+                flash('Error saving expense. Please try again.', 'error')
+                return redirect(url_for('add_expense', group_id=group_id))
+        
+        # Pass today's date for the form
+        today = datetime.now().strftime('%Y-%m-%d')
+        return render_template('add_expense.html', group=group, today=today)
+        
+    except Exception as e:
+        print(f"Error in add_expense: {e}")
+        flash(f'Error: Please try again.', 'error')
+        return redirect(url_for('group_detail', group_id=group_id))
+
+@app.route('/group/<int:group_id>/settle')
+def settle_up(group_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    try:
+        data = load_data()
+        group = data['groups'].get(str(group_id))
+        
+        if not group:
+            flash('Group not found', 'error')
+            return redirect(url_for('index'))
+        
+        # Ensure group has required fields
+        if 'members' not in group:
+            group['members'] = []
+        
+        # Calculate balances for each member
+        balances = {member: 0.0 for member in group['members']}
+        
+        # Get all expenses for this group
+        group_expenses = []
+        for exp_id in group.get('expenses', []):
+            expense = data.get('expenses', {}).get(str(exp_id))
+            if expense and expense.get('group_id') == group_id:
+                group_expenses.append(expense)
+        
+        # Calculate net balance for each member
+        for expense in group_expenses:
+            # The payer gets positive amount (they are owed money)
+            payer = expense.get('paid_by')
+            if payer in balances:
+                balances[payer] += expense.get('amount', 0)
+            
+            # Participants get negative amounts (they owe money)
+            for member, share in expense.get('shares', {}).items():
+                if member in balances:
+                    balances[member] -= share
+        
+        # Round balances to avoid floating point issues
+        balances = {member: round(balance, 2) for member, balance in balances.items()}
+        
+        # Simplify debts
+        settlements = simplify_debts(balances)
+        
+        return render_template('settle_up.html', 
+                             group=group, 
+                             settlements=settlements, 
+                             balances=balances,
+                             total_expenses=len(group_expenses))
+    except Exception as e:
+        print(f"Error in settle_up: {e}")
+        flash('Error calculating settlements', 'error')
+        return redirect(url_for('group_detail', group_id=group_id))
+
+@app.route('/group/<int:group_id>/share')
+def share_group(group_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    try:
+        data = load_data()
+        group = data['groups'].get(str(group_id))
+        
+        if not group:
+            flash('Group not found', 'error')
+            return redirect(url_for('index'))
+        
+        # Check if user owns the group
+        if group.get('owner_id') != session['user_id']:
+            flash('You can only share groups you own.', 'error')
+            return redirect(url_for('group_detail', group_id=group_id))
+        
+        share_link = f"{request.host_url}join_group/{group['share_token']}"
+        
+        # Create WhatsApp share link
+        whatsapp_text = f"Join my expense sharing group '{group['name']}' on Friendz Share: {share_link}"
+        whatsapp_link = f"https://wa.me/?text={whatsapp_text}"
+        
+        # Create email share content
+        email_subject = f"Join my expense sharing group: {group['name']}"
+        email_body = f"""
+        Hi!
+
+        I've created an expense sharing group "{group['name']}" on Friendz Share and I'd like you to join.
+
+        Click the link below to join the group:
+        {share_link}
+
+        With Friendz Share, we can easily track and split expenses together.
+
+        Looking forward to sharing expenses with you!
+
+        Best regards,
+        {session['user_name']}
+        """
+        
+        return render_template('share_group.html', 
+                             group=group, 
+                             share_link=share_link,
+                             whatsapp_link=whatsapp_link,
+                             email_subject=email_subject,
+                             email_body=email_body)
+    except Exception as e:
+        print(f"Error sharing group: {e}")
+        flash('Error generating share link', 'error')
+        return redirect(url_for('group_detail', group_id=group_id))
+
+@app.route('/join_group/<token>')
+def join_group(token):
+    if 'user_id' not in session:
+        flash('Please login to join this group.', 'warning')
+        return redirect(url_for('login'))
+    
+    try:
+        data = load_data()
+        
+        # Find group with matching share token
+        target_group = None
+        for group_id, group in data['groups'].items():
+            if group.get('share_token') == token:
+                target_group = group
+                break
+        
+        if not target_group:
+            flash('Invalid or expired share link.', 'error')
+            return redirect(url_for('index'))
+        
+        # Check if user already has access
+        if (target_group.get('owner_id') == session['user_id'] or 
+            session['user_id'] in target_group.get('shared_with', [])):
+            flash('You already have access to this group.', 'info')
+            return redirect(url_for('group_detail', group_id=target_group['id']))
+        
+        # Add user to shared_with list
+        if 'shared_with' not in target_group:
+            target_group['shared_with'] = []
+        
+        target_group['shared_with'].append(session['user_id'])
+        
+        if save_data(data):
+            flash(f'You have joined the group "{target_group["name"]}"!', 'success')
+            return redirect(url_for('group_detail', group_id=target_group['id']))
+        else:
+            flash('Error joining group. Please try again.', 'error')
+            return redirect(url_for('index'))
+            
+    except Exception as e:
+        print(f"Error joining group: {e}")
+        flash('Error joining group. Please try again.', 'error')
+        return redirect(url_for('index'))
 
 # Debug route to check email configuration
 @app.route('/debug/email')
