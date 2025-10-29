@@ -453,31 +453,31 @@ def register():
         password = request.form['password']
         confirm_password = request.form['confirm_password']
         
-        print(f"Registration attempt: {username}, {email}")  # Debug log
+        print(f"Registration attempt: {username}, {email}")
         
         # Validation
         if not all([username, email, password]):
             flash('Please fill in all fields.', 'error')
-            return redirect(url_for('login'))
+            return render_template('login.html', registration_error=True)
         
         # Validate email format
         if not is_valid_email(email):
             flash('Please enter a valid email address.', 'error')
-            return redirect(url_for('login'))
+            return render_template('login.html', registration_error=True)
         
         if password != confirm_password:
             flash('Passwords do not match.', 'error')
-            return redirect(url_for('login'))
+            return render_template('login.html', registration_error=True)
         
         if len(password) < 6:
             flash('Password must be at least 6 characters long.', 'error')
-            return redirect(url_for('login'))
+            return render_template('login.html', registration_error=True)
         
         users_data = load_users()
         
         if email in users_data['users']:
             flash('Email already registered. Please login instead.', 'error')
-            return redirect(url_for('login'))
+            return render_template('login.html', registration_error=True)
         
         # Create user
         user_id = str(uuid.uuid4())

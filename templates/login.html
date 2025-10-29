@@ -297,6 +297,14 @@
             0%, 100% { transform: translateY(0) rotate(0deg); }
             50% { transform: translateY(-20px) rotate(180deg); }
         }
+
+        /* Fix for modal backdrop */
+        .modal-backdrop {
+            z-index: 1040;
+        }
+        .modal {
+            z-index: 1050;
+        }
     </style>
 </head>
 <body>
@@ -332,19 +340,20 @@
             
             <ul class="nav nav-tabs" id="authTabs" role="tablist">
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link active" id="login-tab" data-bs-toggle="tab" data-bs-target="#login" type="button" role="tab">Login</button>
+                    <button class="nav-link {{ 'active' if not registration_error else '' }}" id="login-tab" data-bs-toggle="tab" data-bs-target="#login" type="button" role="tab">Login</button>
                 </li>
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="register-tab" data-bs-toggle="tab" data-bs-target="#register" type="button" role="tab">Register</button>
+                    <button class="nav-link {{ 'active' if registration_error else '' }}" id="register-tab" data-bs-toggle="tab" data-bs-target="#register" type="button" role="tab">Register</button>
                 </li>
             </ul>
             
             <div class="tab-content" id="authTabsContent">
                 <!-- Login Tab -->
-                <div class="tab-pane fade show active" id="login" role="tabpanel">
-                    <form method="POST" action="{{ url_for('login') }}">
+                <div class="tab-pane fade {{ 'show active' if not registration_error else '' }}" id="login" role="tabpanel">
+                    <form method="POST" action="{{ url_for('login') }}" id="loginForm">
                         <div class="form-floating">
-                            <input type="email" class="form-control" id="loginEmail" name="email" placeholder="name@example.com" required>
+                            <input type="email" class="form-control" id="loginEmail" name="email" placeholder="name@example.com" required 
+                                   value="{{ request.form.email if request.method == 'POST' and not registration_error else '' }}">
                             <label for="loginEmail"><i class="fas fa-envelope me-2"></i>Email address</label>
                         </div>
                         
@@ -361,26 +370,28 @@
                             <label class="form-check-label" for="rememberMe">Remember me</label>
                         </div>
                         
-                        <button type="submit" class="btn btn-login">
+                        <button type="submit" class="btn btn-login" id="loginBtn">
                             <i class="fas fa-sign-in-alt me-2"></i>Login
                         </button>
-                        
-                        <div class="text-center mt-3">
-                            <a href="{{ url_for('forgot_password') }}" class="text-decoration-none">Forgot your password?</a>
-                        </div>
                     </form>
+
+                    <div class="text-center mt-3">
+                        <a href="#" data-bs-toggle="modal" data-bs-target="#forgotPasswordModal" class="text-decoration-none">Forgot your password?</a>
+                    </div>
                 </div>
                 
                 <!-- Register Tab -->
-                <div class="tab-pane fade" id="register" role="tabpanel">
-                    <form method="POST" action="{{ url_for('register') }}">
+                <div class="tab-pane fade {{ 'show active' if registration_error else '' }}" id="register" role="tabpanel">
+                    <form method="POST" action="{{ url_for('register') }}" id="registerForm">
                         <div class="form-floating">
-                            <input type="text" class="form-control" id="registerUsername" name="username" placeholder="Your Name" required>
+                            <input type="text" class="form-control" id="registerUsername" name="username" placeholder="Your Name" required 
+                                   value="{{ request.form.username if request.method == 'POST' and registration_error else '' }}">
                             <label for="registerUsername"><i class="fas fa-user me-2"></i>Full Name</label>
                         </div>
                         
                         <div class="form-floating">
-                            <input type="email" class="form-control" id="registerEmail" name="email" placeholder="name@example.com" required>
+                            <input type="email" class="form-control" id="registerEmail" name="email" placeholder="name@example.com" required
+                                   value="{{ request.form.email if request.method == 'POST' and registration_error else '' }}">
                             <label for="registerEmail"><i class="fas fa-envelope me-2"></i>Email address</label>
                         </div>
                         
@@ -400,36 +411,36 @@
                             </button>
                         </div>
                         
-                        <button type="submit" class="btn btn-login">
+                        <button type="submit" class="btn btn-login" id="registerBtn">
                             <i class="fas fa-user-plus me-2"></i>Create Account
                         </button>
                     </form>
                 </div>
             </div>
-            <div class="modal fade" id="forgotPasswordModal" tabindex="-1">
-   
-   
+            
+            <!-- Forgot Password Modal -->
+            <div class="modal fade" id="forgotPasswordModal" tabindex="-1" aria-hidden="true">
                 <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Reset Password</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <form method="POST" action="{{ url_for('forgot_password') }}">
-                    <div class="form-floating mb-3">
-                        <input type="email" class="form-control" id="forgotEmail" name="email" placeholder="name@example.com" required>
-                        <label for="forgotEmail">Enter your email address</label>
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Reset Password</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <form method="POST" action="{{ url_for('forgot_password') }}" id="forgotPasswordForm">
+                                <div class="form-floating mb-3">
+                                    <input type="email" class="form-control" id="forgotEmail" name="email" placeholder="name@example.com" required>
+                                    <label for="forgotEmail">Enter your email address</label>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100" id="forgotPasswordBtn">
+                                    Send Reset Instructions
+                                </button>
+                            </form>
+                        </div>
                     </div>
-                    <button type="submit" class="btn btn-primary w-100">Send Reset Instructions</button>
-                </form>
+                </div>
             </div>
-        </div>
-    </div>
-</div>
-            <div class="text-center mt-3">
-    <a href="#" data-bs-toggle="modal" data-bs-target="#forgotPasswordModal" class="text-decoration-none">Forgot your password?</a>
-</div>
+            
             <div class="mt-4">
                 <h6 class="text-center mb-3">Why Join Friendz Share?</h6>
                 
@@ -503,6 +514,38 @@
                     this.parentNode.classList.remove('focused');
                 }
             });
+        });
+
+        // Prevent form double submission and freezing
+        document.addEventListener('DOMContentLoaded', function() {
+            const forms = document.querySelectorAll('form');
+            forms.forEach(form => {
+                form.addEventListener('submit', function(e) {
+                    const submitBtn = this.querySelector('button[type="submit"]');
+                    if (submitBtn) {
+                        submitBtn.disabled = true;
+                        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
+                        
+                        // Re-enable after 5 seconds in case of error
+                        setTimeout(() => {
+                            submitBtn.disabled = false;
+                            if (form.id === 'loginForm') {
+                                submitBtn.innerHTML = '<i class="fas fa-sign-in-alt me-2"></i>Login';
+                            } else if (form.id === 'registerForm') {
+                                submitBtn.innerHTML = '<i class="fas fa-user-plus me-2"></i>Create Account';
+                            } else if (form.id === 'forgotPasswordForm') {
+                                submitBtn.innerHTML = 'Send Reset Instructions';
+                            }
+                        }, 5000);
+                    }
+                });
+            });
+
+            // Auto-focus on register tab if there was a registration error
+            {% if registration_error %}
+            const registerTab = new bootstrap.Tab(document.getElementById('register-tab'));
+            registerTab.show();
+            {% endif %}
         });
     </script>
 </body>
