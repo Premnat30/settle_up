@@ -11,6 +11,8 @@ import secrets
 import hashlib
 import uuid
 import re
+import threading
+import time
 
 
 app = Flask(__name__)
@@ -70,24 +72,19 @@ def verify_password(stored_password, provided_password):
     except:
         return False
 
-def send_verification_email_async(email, verification_token, username):
-    """Send verification email in a separate thread to avoid timeouts"""
-    def send_email():
-        try:
-            # Simulate email sending for now - we'll fix actual email later
-            verification_link = f"https://settle-up-app.onrender.com/verify_email/{verification_token}"
-            print(f"📧 VERIFICATION LINK for {username} ({email}): {verification_link}")
-            print(f"💡 Email functionality temporarily disabled to prevent timeouts")
-            time.sleep(1)  # Simulate some processing time
-        except Exception as e:
-            print(f"❌ Email error: {e}")
-    
-    # Start email in background thread
-    thread = threading.Thread(target=send_email)
-    thread.daemon = True
-    thread.start()
-    return True
+def send_verification_email_safe(email, verification_token, username):
+    """Safe email function that doesn't cause timeouts"""
+    try:
+        # Just print the verification link for now
+        verification_link = f"https://settle-up-app.onrender.com/verify_email/{verification_token}"
+        print(f"📧 VERIFICATION LINK for {username} ({email}): {verification_link}")
+        print(f"💡 Email functionality temporarily disabled to prevent timeouts")
         
+        # Return success but don't actually send email
+        return True
+    except Exception as e:
+        print(f"❌ Email error: {e}")
+        return False
 
 
 def load_data():
@@ -314,7 +311,7 @@ def register():
         
         print(f"Registration attempt: {username}, {email}")
         
-        # Quick validation to prevent timeouts
+        # Quick validation
         if not all([username, email, password]):
             flash('Please fill in all fields.', 'error')
             return render_template('login.html', registration_error=True)
@@ -338,7 +335,7 @@ def register():
             flash('Email already registered. Please login instead.', 'error')
             return render_template('login.html', registration_error=True)
         
-        # Create user (quick operations only)
+        # Create user
         user_id = str(uuid.uuid4())
         verification_token = secrets.token_urlsafe(32)
         
@@ -347,7 +344,7 @@ def register():
             'username': username,
             'email': email,
             'password': hash_password(password),
-            'verified': False,
+            'verified': True,  # Auto-verify for now to bypass email
             'verification_token': verification_token,
             'created_at': datetime.now().isoformat(),
             'profile_visibility': 'private'
@@ -356,14 +353,10 @@ def register():
         users_data['users'][email] = user_data
         
         if save_users(users_data):
-            # Use async email to prevent timeouts
-            try:
-                send_verification_email_async(email, verification_token, username)
-                flash('Registration successful! Account created. Email verification temporarily disabled.', 'success')
-            except Exception as e:
-                print(f"Email error: {e}")
-                flash('Registration successful! Account created.', 'success')
+            # Safe email call - just prints to logs
+            send_verification_email_safe(email, verification_token, username)
             
+            flash('Registration successful! You can now login.', 'success')
             return redirect(url_for('login'))
         else:
             flash('Error creating account. Please try again.', 'error')
@@ -371,33 +364,63 @@ def register():
     
     return redirect(url_for('login'))
 
-app.route('/manual_verify/<email>')
-def manual_verify(email):
-    """Manually verify an account for testing"""
+@app.route('/verify_email/<token>')
+def verify_email(token):
+    """Verify email with the token"""
     users_data = load_users()
-    user = users_data['users'].get(email)
+    user_found = False
     
-    if user and not user.get('verified', False):
-        user['verified'] = True
-        save_users(users_data)
-        flash(f'Account {email} manually verified!', 'success')
+    for email, user in users_data['users'].items():
+        if user.get('verification_token') == token:
+            user['verified'] = True
+            user.pop('verification_token', None)
+            user_found = True
+            break
+    
+    if user_found:
+        if save_users(users_data):
+            flash('Email verified successfully! You can now login.', 'success')
+        else:
+            flash('Error verifying email. Please try again.', 'error')
     else:
-        flash('User not found or already verified', 'error')
+        flash('Invalid or expired verification link.', 'error')
     
     return redirect(url_for('login'))
 
-app.route('/manual_verify/<email>')
-def manual_verify(email):
-    """Manually verify an account for testing"""
+@app.route('/debug/users')
+def debug_users():
+    """Show all users for debugging"""
     users_data = load_users()
-    user = users_data['users'].get(email)
+    user_list = []
     
-    if user and not user.get('verified', False):
-        user['verified'] = True
-        save_users(users_data)
-        flash(f'Account {email} manually verified!', 'success')
+    for email, user in users_data.get('users', {}).items():
+        user_list.append({
+            'email': email,
+            'username': user.get('username'),
+            'verified': user.get('verified', False),
+            'has_token': 'verification_token' in user
+        })
+    
+    return jsonify({
+        'total_users': len(user_list),
+        'users': user_list
+    })
+
+@app.route('/auto_verify_all')
+def auto_verify_all():
+    """Auto-verify all existing users"""
+    users_data = load_users()
+    verified_count = 0
+    
+    for email, user in users_data['users'].items():
+        if not user.get('verified', False):
+            user['verified'] = True
+            verified_count += 1
+    
+    if save_users(users_data):
+        flash(f'Successfully verified {verified_count} users!', 'success')
     else:
-        flash('User not found or already verified', 'error')
+        flash('Error verifying users', 'error')
     
     return redirect(url_for('login'))
 
