@@ -71,27 +71,177 @@ def verify_password(stored_password, provided_password):
     except:
         return False
 
-def send_verification_email_safe(email, verification_token, username):
-    """Safe email function that doesn't cause timeouts"""
+def send_verification_email(email, verification_token, username):
+    """Send verification email using Outlook/Hotmail"""
     try:
-        # Just print the verification link for now
-        verification_link = f"https://settle-up-app.onrender.com/verify_email/{verification_token}"
-        print(f"📧 VERIFICATION LINK for {username} ({email}): {verification_link}")
-        print(f"💡 Email functionality temporarily disabled to prevent timeouts")
+        # Check if email is configured
+        if not app.config['MAIL_USERNAME'] or not app.config['MAIL_PASSWORD']:
+            print("❌ OUTLOOK CONFIG: Missing username or password")
+            verification_link = f"https://settle-up-app.onrender.com/verify_email/{verification_token}"
+            print(f"📧 VERIFICATION LINK for {username} ({email}): {verification_link}")
+            return False
+            
+        print(f"🔧 Attempting to send email via Outlook to: {email}")
+        print(f"🔧 Using SMTP server: {app.config['MAIL_SERVER']}:{app.config['MAIL_PORT']}")
+        print(f"🔧 Using username: {app.config['MAIL_USERNAME']}")
         
-        # Return success but don't actually send email
+        # For Render deployment, use the actual URL
+        verification_link = f"https://settle-up-app.onrender.com/verify_email/{verification_token}"
+        
+        # Email content
+        subject = "Verify Your Friendz Share Account"
+        
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                         color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }}
+                .content {{ background: #f9f9f9; padding: 20px; border-radius: 0 0 10px 10px; }}
+                .button {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                         color: white; padding: 12px 30px; text-decoration: none; 
+                         border-radius: 25px; display: inline-block; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>Friendz Share</h1>
+                    <p>Share Expenses. Strengthen Friendships.</p>
+                </div>
+                <div class="content">
+                    <h2>Welcome, {username}!</h2>
+                    <p>Thank you for registering with Friendz Share. To start sharing expenses with your friends, please verify your email address by clicking the button below:</p>
+                    
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="{verification_link}" class="button">Verify Email Address</a>
+                    </div>
+                    
+                    <p>If the button doesn't work, copy and paste this link in your browser:</p>
+                    <p style="word-break: break-all; color: #667eea;">{verification_link}</p>
+                    
+                    <p>This link will expire in 24 hours for security reasons.</p>
+                    
+                    <p>Happy sharing!<br>The Friendz Share Team</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        # Create message
+        msg = MIMEMultipart()
+        msg['From'] = app.config['MAIL_USERNAME']
+        msg['To'] = email
+        msg['Subject'] = subject
+        
+        # Add HTML content
+        msg.attach(MIMEText(html_content, 'html'))
+        
+        print(f"🔧 Connecting to Outlook SMTP server...")
+        # Send email with timeout
+        server = smtplib.SMTP(app.config['MAIL_SERVER'], app.config['MAIL_PORT'], timeout=15)
+        
+        print(f"🔧 Starting TLS...")
+        server.starttls()
+        
+        print(f"🔧 Attempting Outlook login...")
+        server.login(app.config['MAIL_USERNAME'], app.config['MAIL_PASSWORD'])
+        
+        print(f"🔧 Sending email via Outlook...")
+        server.send_message(msg)
+        server.quit()
+        
+        print(f"✅ Email sent successfully via Outlook to {email}")
         return True
+        
+    except smtplib.SMTPAuthenticationError as e:
+        print(f"❌ OUTLOOK AUTH ERROR: Invalid credentials - {e}")
+        print(f"💡 TIP: Make sure you're using the correct password and 'Less secure apps' might need to be enabled")
+        return False
+    except smtplib.SMTPException as e:
+        print(f"❌ OUTLOOK SMTP ERROR: {e}")
+        return False
     except Exception as e:
-        print(f"❌ Email error: {e}")
+        print(f"❌ OUTLOOK GENERAL ERROR: {str(e)}")
+        print(f"💡 Error type: {type(e).__name__}")
+        # Fallback: print verification link to console
+        verification_link = f"https://settle-up-app.onrender.com/verify_email/{verification_token}"
+        print(f"📧 FALLBACK VERIFICATION LINK for {username} ({email}): {verification_link}")
         return False
 
 def send_password_reset_email(email, reset_token, username):
-    """Safe password reset email function"""
+    """Send password reset email using Outlook"""
     try:
+        if not app.config['MAIL_USERNAME'] or not app.config['MAIL_PASSWORD']:
+            print("❌ OUTLOOK CONFIG: Missing credentials for password reset")
+            return False
+            
         reset_link = f"https://settle-up-app.onrender.com/reset_password/{reset_token}"
-        print(f"📧 PASSWORD RESET LINK for {username} ({email}): {reset_link}")
-        print(f"💡 Email functionality temporarily disabled to prevent timeouts")
+        
+        subject = "Reset Your Friendz Share Password"
+        
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                         color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }}
+                .content {{ background: #f9f9f9; padding: 20px; border-radius: 0 0 10px 10px; }}
+                .button {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                         color: white; padding: 12px 30px; text-decoration: none; 
+                         border-radius: 25px; display: inline-block; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>Friendz Share</h1>
+                    <p>Password Reset Request</p>
+                </div>
+                <div class="content">
+                    <h2>Hello, {username}!</h2>
+                    <p>We received a request to reset your password. Click the button below to create a new password:</p>
+                    
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="{reset_link}" class="button">Reset Password</a>
+                    </div>
+                    
+                    <p>If the button doesn't work, copy and paste this link in your browser:</p>
+                    <p style="word-break: break-all; color: #667eea;">{reset_link}</p>
+                    
+                    <p>This link will expire in 1 hour for security reasons.</p>
+                    
+                    <p>If you didn't request a password reset, please ignore this email.</p>
+                    
+                    <p>Best regards,<br>The Friendz Share Team</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        msg = MIMEMultipart()
+        msg['From'] = app.config['MAIL_USERNAME']
+        msg['To'] = email
+        msg['Subject'] = subject
+        msg.attach(MIMEText(html_content, 'html'))
+        
+        server = smtplib.SMTP(app.config['MAIL_SERVER'], app.config['MAIL_PORT'], timeout=15)
+        server.starttls()
+        server.login(app.config['MAIL_USERNAME'], app.config['MAIL_PASSWORD'])
+        server.send_message(msg)
+        server.quit()
+        
+        print(f"✅ Password reset email sent to {email}")
         return True
+        
     except Exception as e:
         print(f"❌ Password reset email error: {e}")
         return False
@@ -352,7 +502,7 @@ def register():
             'username': username,
             'email': email,
             'password': hash_password(password),
-            'verified': True,  # Auto-verify for now to bypass email
+            'verified': False,  # REQUIRES EMAIL VERIFICATION
             'verification_token': verification_token,
             'created_at': datetime.now().isoformat(),
             'profile_visibility': 'private'
@@ -361,10 +511,11 @@ def register():
         users_data['users'][email] = user_data
         
         if save_users(users_data):
-            # Safe email call - just prints to logs
-            send_verification_email_safe(email, verification_token, username)
-            
-            flash('Registration successful! You can now login.', 'success')
+            # ACTUAL EMAIL SENDING - not auto-verify
+            if send_verification_email(email, verification_token, username):
+                flash('Registration successful! Please check your email to verify your account.', 'success')
+            else:
+                flash('Registration successful, but we could not send verification email. Please contact support.', 'warning')
             return redirect(url_for('login'))
         else:
             flash('Error creating account. Please try again.', 'error')
