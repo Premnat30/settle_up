@@ -14,11 +14,10 @@ import re
 import threading
 import time
 
-
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-12345')
 
-# Email configuration - use environment variables
+# Email configuration
 app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
 app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587))
 app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', '')
@@ -86,6 +85,16 @@ def send_verification_email_safe(email, verification_token, username):
         print(f"❌ Email error: {e}")
         return False
 
+def send_password_reset_email(email, reset_token, username):
+    """Safe password reset email function"""
+    try:
+        reset_link = f"https://settle-up-app.onrender.com/reset_password/{reset_token}"
+        print(f"📧 PASSWORD RESET LINK for {username} ({email}): {reset_link}")
+        print(f"💡 Email functionality temporarily disabled to prevent timeouts")
+        return True
+    except Exception as e:
+        print(f"❌ Password reset email error: {e}")
+        return False
 
 def load_data():
     """Load data from file with proper error handling"""
@@ -138,7 +147,6 @@ def save_data(data):
     except Exception as e:
         print(f"Error saving data: {e}")
         return False
-
 
 def get_next_group_id():
     data = load_data()
@@ -387,43 +395,6 @@ def verify_email(token):
     
     return redirect(url_for('login'))
 
-@app.route('/debug/users')
-def debug_users():
-    """Show all users for debugging"""
-    users_data = load_users()
-    user_list = []
-    
-    for email, user in users_data.get('users', {}).items():
-        user_list.append({
-            'email': email,
-            'username': user.get('username'),
-            'verified': user.get('verified', False),
-            'has_token': 'verification_token' in user
-        })
-    
-    return jsonify({
-        'total_users': len(user_list),
-        'users': user_list
-    })
-
-@app.route('/auto_verify_all')
-def auto_verify_all():
-    """Auto-verify all existing users"""
-    users_data = load_users()
-    verified_count = 0
-    
-    for email, user in users_data['users'].items():
-        if not user.get('verified', False):
-            user['verified'] = True
-            verified_count += 1
-    
-    if save_users(users_data):
-        flash(f'Successfully verified {verified_count} users!', 'success')
-    else:
-        flash('Error verifying users', 'error')
-    
-    return redirect(url_for('login'))
-
 @app.route('/forgot_password', methods=['POST'])
 def forgot_password():
     if request.method == 'POST':
@@ -560,8 +531,6 @@ def index():
                              total_expenses=0, 
                              total_spent=0, 
                              user_name=session.get('user_name', 'Friend'))
-    
-    # === ADD MISSING GROUP MANAGEMENT ROUTES ===
 
 @app.route('/create_group', methods=['GET', 'POST'])
 def create_group():
@@ -1012,22 +981,43 @@ def debug_email():
     
     return jsonify(email_config)
 
-# Debug route to check users
+# Debug route to check users (ONLY ONE VERSION)
 @app.route('/debug/users')
 def debug_users():
+    """Show all users for debugging"""
     users_data = load_users()
-    user_list = {}
+    user_list = []
+    
     for email, user in users_data.get('users', {}).items():
-        user_list[email] = {
+        user_list.append({
+            'email': email,
             'username': user.get('username'),
             'verified': user.get('verified', False),
-            'created_at': user.get('created_at')
-        }
+            'has_token': 'verification_token' in user
+        })
     
     return jsonify({
-        'total_users': len(users_data.get('users', {})),
+        'total_users': len(user_list),
         'users': user_list
     })
+
+@app.route('/auto_verify_all')
+def auto_verify_all():
+    """Auto-verify all existing users"""
+    users_data = load_users()
+    verified_count = 0
+    
+    for email, user in users_data['users'].items():
+        if not user.get('verified', False):
+            user['verified'] = True
+            verified_count += 1
+    
+    if save_users(users_data):
+        flash(f'Successfully verified {verified_count} users!', 'success')
+    else:
+        flash('Error verifying users', 'error')
+    
+    return redirect(url_for('login'))
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
