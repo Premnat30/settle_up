@@ -33,6 +33,69 @@ USERS_FILE = 'users.json'
 email_queue = queue.Queue()
 email_worker_started = False
 
+@app.route('/debug/email_queue')
+def debug_email_queue():
+    """Show current email queue status"""
+    queue_info = {
+        'queue_size': email_queue.qsize(),
+        'worker_started': email_worker_started,
+        'email_config': {
+            'MAIL_SERVER': app.config['MAIL_SERVER'],
+            'MAIL_PORT': app.config['MAIL_PORT'],
+            'MAIL_USERNAME_set': bool(app.config['MAIL_USERNAME']),
+            'MAIL_PASSWORD_set': bool(app.config['MAIL_PASSWORD']),
+            'MAIL_USE_TLS': app.config['MAIL_USE_TLS']
+        }
+    }
+    return jsonify(queue_info)
+
+# Test email route
+@app.route('/test_email/<email>')
+def test_email(email):
+    """Test email sending to a specific email"""
+    if not is_valid_email(email):
+        return jsonify({'error': 'Invalid email address'})
+    
+    test_token = "test-token-123"
+    test_username = "Test User"
+    
+    # Queue test email
+    email_queued = queue_verification_email(email, test_token, test_username)
+    
+    return jsonify({
+        'email_queued': email_queued,
+        'email': email,
+        'message': 'Test email queued for sending'
+    })
+
+# Route to manually verify users (in case email fails)
+@app.route('/manual_verify/<email>')
+def manual_verify(email):
+    """Manually verify a user's email"""
+    users_data = load_users()
+    user = users_data['users'].get(email.lower())
+    
+    if not user:
+        return jsonify({'error': 'User not found'})
+    
+    user['verified'] = True
+    if 'verification_token' in user:
+        user.pop('verification_token')
+    
+    if save_users(users_data):
+        return jsonify({
+            'success': True,
+            'message': f'User {email} manually verified',
+            'user': {
+                'username': user.get('username'),
+                'email': email,
+                'verified': user['verified']
+            }
+        })
+    else:
+        return jsonify({'error': 'Failed to save user data'})
+    
+
 def email_worker():
     """Background worker to process emails from queue"""
     while True:
@@ -78,6 +141,8 @@ def _send_verification_email_sync(email, verification_token, username):
             return False
             
         print(f"🔧 Sending verification email to: {email}")
+        print(f"🔧 Using SMTP: {app.config['MAIL_SERVER']}:{app.config['MAIL_PORT']}")
+        print(f"🔧 From: {app.config['MAIL_USERNAME']}")
         
         verification_link = f"https://settle-up-app.onrender.com/verify_email/{verification_token}"
         subject = "Verify Your Friendz Share Account"
@@ -129,95 +194,37 @@ def _send_verification_email_sync(email, verification_token, username):
         msg['Subject'] = subject
         msg.attach(MIMEText(html_content, 'html'))
         
+        print(f"🔧 Attempting SMTP connection...")
         # Use shorter timeout
         server = smtplib.SMTP(app.config['MAIL_SERVER'], app.config['MAIL_PORT'], timeout=10)
+        
+        print(f"🔧 Starting TLS...")
         server.starttls()
+        
+        print(f"🔧 Attempting login...")
         server.login(app.config['MAIL_USERNAME'], app.config['MAIL_PASSWORD'])
+        
+        print(f"🔧 Sending email...")
         server.send_message(msg)
         server.quit()
         
-        print(f"✅ Verification email sent to {email}")
+        print(f"✅ Verification email sent successfully to {email}")
         return True
         
+    except smtplib.SMTPAuthenticationError as e:
+        print(f"❌ SMTP AUTH ERROR: Invalid credentials - {e}")
+        print(f"💡 TIP: Make sure you're using an App Password, not your regular Outlook password")
+        return False
+    except smtplib.SMTPException as e:
+        print(f"❌ SMTP ERROR: {e}")
+        return False
     except Exception as e:
-        print(f"❌ Failed to send verification email: {e}")
+        print(f"❌ GENERAL EMAIL ERROR: {str(e)}")
+        print(f"💡 Error type: {type(e).__name__}")
         verification_link = f"https://settle-up-app.onrender.com/verify_email/{verification_token}"
         print(f"📧 MANUAL VERIFICATION LINK: {verification_link}")
         return False
-
-def _send_password_reset_email_sync(email, reset_token, username):
-    """Synchronous password reset email (called from background worker)"""
-    try:
-        if not app.config['MAIL_USERNAME'] or not app.config['MAIL_PASSWORD']:
-            print("❌ Email credentials not configured for password reset")
-            return False
-            
-        reset_link = f"https://settle-up-app.onrender.com/reset_password/{reset_token}"
-        
-        subject = "Reset Your Friendz Share Password"
-        
-        html_content = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <style>
-                body {{ font-family: Arial, sans-serif; }}
-                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                         color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }}
-                .content {{ background: #f9f9f9; padding: 20px; border-radius: 0 0 10px 10px; }}
-                .button {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                         color: white; padding: 12px 30px; text-decoration: none; 
-                         border-radius: 25px; display: inline-block; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h1>Friendz Share</h1>
-                    <p>Password Reset Request</p>
-                </div>
-                <div class="content">
-                    <h2>Hello, {username}!</h2>
-                    <p>We received a request to reset your password. Click the button below to create a new password:</p>
-                    
-                    <div style="text-align: center; margin: 30px 0;">
-                        <a href="{reset_link}" class="button">Reset Password</a>
-                    </div>
-                    
-                    <p>If the button doesn't work, copy and paste this link in your browser:</p>
-                    <p style="word-break: break-all; color: #667eea;">{reset_link}</p>
-                    
-                    <p>This link will expire in 1 hour for security reasons.</p>
-                    
-                    <p>If you didn't request a password reset, please ignore this email.</p>
-                    
-                    <p>Best regards,<br>The Friendz Share Team</p>
-                </div>
-            </div>
-        </body>
-        </html>
-        """
-        
-        msg = MIMEMultipart()
-        msg['From'] = app.config['MAIL_USERNAME']
-        msg['To'] = email
-        msg['Subject'] = subject
-        msg.attach(MIMEText(html_content, 'html'))
-        
-        server = smtplib.SMTP(app.config['MAIL_SERVER'], app.config['MAIL_PORT'], timeout=10)
-        server.starttls()
-        server.login(app.config['MAIL_USERNAME'], app.config['MAIL_PASSWORD'])
-        server.send_message(msg)
-        server.quit()
-        
-        print(f"✅ Password reset email sent to {email}")
-        return True
-        
-    except Exception as e:
-        print(f"❌ Password reset email error: {e}")
-        return False
-
+    
 def queue_verification_email(email, verification_token, username):
     """Queue verification email for background processing"""
     try:
