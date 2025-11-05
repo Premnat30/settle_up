@@ -463,6 +463,17 @@ def simplify_debts(balances):
     except Exception:
         return []
 
+# Initialize app on startup
+def initialize_app():
+    """Initialize data files and email worker"""
+    load_data()
+    load_users()
+    start_email_worker()
+    print("✅ App initialized successfully")
+
+# Call initialization
+initialize_app()
+
 # Health check endpoint
 @app.route('/health')
 def health_check():
@@ -1222,22 +1233,10 @@ def auto_verify_all():
     
     return redirect(url_for('login'))
 
-# Initialize email worker when app starts
-start_email_worker()
-
-@app.before_first_request
-def initialize_app():
-    """Initialize data files on first request"""
-    load_data()
-    load_users()
-    start_email_worker()  # Ensure email worker is running
-    print("✅ App initialized successfully")
-
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    # Start email worker
-    start_email_worker()
     # Initialize data files on startup
     load_data()
     load_users()
+    start_email_worker()
     app.run(host='0.0.0.0', port=port, debug=False)
