@@ -13,12 +13,13 @@ import uuid
 import re
 import threading
 import time
+import queue
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-12345')
 
 # Email configuration
-app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
+app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.office365.com')
 app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587))
 app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', '')
 app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', '')
@@ -28,67 +29,57 @@ app.config['MAIL_USE_TLS'] = True
 DATA_FILE = 'data.json'
 USERS_FILE = 'users.json'
 
-def is_valid_email(email):
-    """Validate email format"""
-    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    return re.match(pattern, email) is not None
+# Email queue for background processing
+email_queue = queue.Queue()
+email_worker_started = False
 
-def load_users():
-    """Load users data from file"""
+def email_worker():
+    """Background worker to process emails from queue"""
+    while True:
+        try:
+            # Get email task from queue (with timeout to allow graceful shutdown)
+            task = email_queue.get(timeout=30)
+            if task is None:  # Shutdown signal
+                break
+                
+            email_type, email, token, username = task
+            print(f"📧 Processing {email_type} email for {username} ({email})")
+            
+            if email_type == 'verification':
+                _send_verification_email_sync(email, token, username)
+            elif email_type == 'password_reset':
+                _send_password_reset_email_sync(email, token, username)
+                
+            email_queue.task_done()
+            print(f"✅ {email_type} email processed for {email}")
+            
+        except queue.Empty:
+            continue
+        except Exception as e:
+            print(f"❌ Email worker error: {e}")
+            continue
+
+def start_email_worker():
+    """Start the background email worker"""
+    global email_worker_started
+    if not email_worker_started:
+        worker_thread = threading.Thread(target=email_worker, daemon=True)
+        worker_thread.start()
+        email_worker_started = True
+        print("✅ Email worker started")
+
+def _send_verification_email_sync(email, verification_token, username):
+    """Synchronous email sending (called from background worker)"""
     try:
-        if not os.path.exists(USERS_FILE):
-            default_data = {'users': {}}
-            with open(USERS_FILE, 'w') as f:
-                json.dump(default_data, f, indent=2)
-            return default_data
-        
-        with open(USERS_FILE, 'r') as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"Error loading users: {e}")
-        return {'users': {}}
-
-def save_users(data):
-    """Save users data to file"""
-    try:
-        with open(USERS_FILE, 'w') as f:
-            json.dump(data, f, indent=2)
-        return True
-    except Exception as e:
-        print(f"Error saving users: {e}")
-        return False
-
-def hash_password(password):
-    """Hash password using SHA-256 with salt"""
-    salt = secrets.token_hex(16)
-    return hashlib.sha256((password + salt).encode()).hexdigest() + ':' + salt
-
-def verify_password(stored_password, provided_password):
-    """Verify password against stored hash"""
-    try:
-        hashed, salt = stored_password.split(':')
-        return hashlib.sha256((provided_password + salt).encode()).hexdigest() == hashed
-    except:
-        return False
-
-def send_verification_email(email, verification_token, username):
-    """Send verification email using Outlook/Hotmail"""
-    try:
-        # Check if email is configured
         if not app.config['MAIL_USERNAME'] or not app.config['MAIL_PASSWORD']:
-            print("❌ OUTLOOK CONFIG: Missing username or password")
+            print("❌ Email credentials not configured")
             verification_link = f"https://settle-up-app.onrender.com/verify_email/{verification_token}"
-            print(f"📧 VERIFICATION LINK for {username} ({email}): {verification_link}")
+            print(f"📧 VERIFICATION LINK: {verification_link}")
             return False
             
-        print(f"🔧 Attempting to send email via Outlook to: {email}")
-        print(f"🔧 Using SMTP server: {app.config['MAIL_SERVER']}:{app.config['MAIL_PORT']}")
-        print(f"🔧 Using username: {app.config['MAIL_USERNAME']}")
+        print(f"🔧 Sending verification email to: {email}")
         
-        # For Render deployment, use the actual URL
         verification_link = f"https://settle-up-app.onrender.com/verify_email/{verification_token}"
-        
-        # Email content
         subject = "Verify Your Friendz Share Account"
         
         html_content = f"""
@@ -132,52 +123,33 @@ def send_verification_email(email, verification_token, username):
         </html>
         """
         
-        # Create message
         msg = MIMEMultipart()
         msg['From'] = app.config['MAIL_USERNAME']
         msg['To'] = email
         msg['Subject'] = subject
-        
-        # Add HTML content
         msg.attach(MIMEText(html_content, 'html'))
         
-        print(f"🔧 Connecting to Outlook SMTP server...")
-        # Send email with timeout
-        server = smtplib.SMTP(app.config['MAIL_SERVER'], app.config['MAIL_PORT'], timeout=15)
-        
-        print(f"🔧 Starting TLS...")
+        # Use shorter timeout
+        server = smtplib.SMTP(app.config['MAIL_SERVER'], app.config['MAIL_PORT'], timeout=10)
         server.starttls()
-        
-        print(f"🔧 Attempting Outlook login...")
         server.login(app.config['MAIL_USERNAME'], app.config['MAIL_PASSWORD'])
-        
-        print(f"🔧 Sending email via Outlook...")
         server.send_message(msg)
         server.quit()
         
-        print(f"✅ Email sent successfully via Outlook to {email}")
+        print(f"✅ Verification email sent to {email}")
         return True
         
-    except smtplib.SMTPAuthenticationError as e:
-        print(f"❌ OUTLOOK AUTH ERROR: Invalid credentials - {e}")
-        print(f"💡 TIP: Make sure you're using the correct password and 'Less secure apps' might need to be enabled")
-        return False
-    except smtplib.SMTPException as e:
-        print(f"❌ OUTLOOK SMTP ERROR: {e}")
-        return False
     except Exception as e:
-        print(f"❌ OUTLOOK GENERAL ERROR: {str(e)}")
-        print(f"💡 Error type: {type(e).__name__}")
-        # Fallback: print verification link to console
+        print(f"❌ Failed to send verification email: {e}")
         verification_link = f"https://settle-up-app.onrender.com/verify_email/{verification_token}"
-        print(f"📧 FALLBACK VERIFICATION LINK for {username} ({email}): {verification_link}")
+        print(f"📧 MANUAL VERIFICATION LINK: {verification_link}")
         return False
 
-def send_password_reset_email(email, reset_token, username):
-    """Send password reset email using Outlook"""
+def _send_password_reset_email_sync(email, reset_token, username):
+    """Synchronous password reset email (called from background worker)"""
     try:
         if not app.config['MAIL_USERNAME'] or not app.config['MAIL_PASSWORD']:
-            print("❌ OUTLOOK CONFIG: Missing credentials for password reset")
+            print("❌ Email credentials not configured for password reset")
             return False
             
         reset_link = f"https://settle-up-app.onrender.com/reset_password/{reset_token}"
@@ -233,7 +205,7 @@ def send_password_reset_email(email, reset_token, username):
         msg['Subject'] = subject
         msg.attach(MIMEText(html_content, 'html'))
         
-        server = smtplib.SMTP(app.config['MAIL_SERVER'], app.config['MAIL_PORT'], timeout=15)
+        server = smtplib.SMTP(app.config['MAIL_SERVER'], app.config['MAIL_PORT'], timeout=10)
         server.starttls()
         server.login(app.config['MAIL_USERNAME'], app.config['MAIL_PASSWORD'])
         server.send_message(msg)
@@ -244,6 +216,71 @@ def send_password_reset_email(email, reset_token, username):
         
     except Exception as e:
         print(f"❌ Password reset email error: {e}")
+        return False
+
+def queue_verification_email(email, verification_token, username):
+    """Queue verification email for background processing"""
+    try:
+        start_email_worker()  # Ensure worker is running
+        email_queue.put(('verification', email, verification_token, username))
+        print(f"📧 Verification email queued for {email}")
+        return True
+    except Exception as e:
+        print(f"❌ Failed to queue verification email: {e}")
+        return False
+
+def queue_password_reset_email(email, reset_token, username):
+    """Queue password reset email for background processing"""
+    try:
+        start_email_worker()  # Ensure worker is running
+        email_queue.put(('password_reset', email, reset_token, username))
+        print(f"📧 Password reset email queued for {email}")
+        return True
+    except Exception as e:
+        print(f"❌ Failed to queue password reset email: {e}")
+        return False
+
+def is_valid_email(email):
+    """Validate email format"""
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return re.match(pattern, email) is not None
+
+def load_users():
+    """Load users data from file"""
+    try:
+        if not os.path.exists(USERS_FILE):
+            default_data = {'users': {}}
+            with open(USERS_FILE, 'w') as f:
+                json.dump(default_data, f, indent=2)
+            return default_data
+        
+        with open(USERS_FILE, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading users: {e}")
+        return {'users': {}}
+
+def save_users(data):
+    """Save users data to file"""
+    try:
+        with open(USERS_FILE, 'w') as f:
+            json.dump(data, f, indent=2)
+        return True
+    except Exception as e:
+        print(f"Error saving users: {e}")
+        return False
+
+def hash_password(password):
+    """Hash password using SHA-256 with salt"""
+    salt = secrets.token_hex(16)
+    return hashlib.sha256((password + salt).encode()).hexdigest() + ':' + salt
+
+def verify_password(stored_password, provided_password):
+    """Verify password against stored hash"""
+    try:
+        hashed, salt = stored_password.split(':')
+        return hashlib.sha256((provided_password + salt).encode()).hexdigest() == hashed
+    except:
         return False
 
 def load_data():
@@ -426,6 +463,16 @@ def simplify_debts(balances):
     except Exception:
         return []
 
+# Health check endpoint
+@app.route('/health')
+def health_check():
+    """Health check endpoint for Render"""
+    return jsonify({
+        'status': 'healthy', 
+        'timestamp': datetime.now().isoformat(),
+        'service': 'Friendz Share'
+    })
+
 # Authentication Routes
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -511,11 +558,17 @@ def register():
         users_data['users'][email] = user_data
         
         if save_users(users_data):
-            # ACTUAL EMAIL SENDING - not auto-verify
-            if send_verification_email(email, verification_token, username):
+            # Queue email for background processing (NON-BLOCKING)
+            email_queued = queue_verification_email(email, verification_token, username)
+            
+            if email_queued:
                 flash('Registration successful! Please check your email to verify your account.', 'success')
             else:
-                flash('Registration successful, but we could not send verification email. Please contact support.', 'warning')
+                # Fallback: auto-verify the user if email fails to queue
+                user_data['verified'] = True
+                save_users(users_data)
+                flash('Registration successful! You can now login.', 'success')
+            
             return redirect(url_for('login'))
         else:
             flash('Error creating account. Please try again.', 'error')
@@ -565,13 +618,12 @@ def forgot_password():
             user['reset_token_expiry'] = (datetime.now() + timedelta(hours=1)).isoformat()
             
             if save_users(users_data):
-                try:
-                    if send_password_reset_email(email, reset_token, user['username']):
-                        flash('Password reset instructions sent to your email.', 'success')
-                    else:
-                        flash('Error sending reset email. Please try again.', 'error')
-                except Exception as e:
-                    print(f"Error in password reset email: {e}")
+                # Queue password reset email for background processing
+                email_queued = queue_password_reset_email(email, reset_token, user['username'])
+                
+                if email_queued:
+                    flash('Password reset instructions sent to your email.', 'success')
+                else:
                     flash('Error sending reset email. Please try again.', 'error')
             else:
                 flash('Error processing request. Please try again.', 'error')
@@ -1170,8 +1222,21 @@ def auto_verify_all():
     
     return redirect(url_for('login'))
 
+# Initialize email worker when app starts
+start_email_worker()
+
+@app.before_first_request
+def initialize_app():
+    """Initialize data files on first request"""
+    load_data()
+    load_users()
+    start_email_worker()  # Ensure email worker is running
+    print("✅ App initialized successfully")
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
+    # Start email worker
+    start_email_worker()
     # Initialize data files on startup
     load_data()
     load_users()
