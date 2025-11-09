@@ -14,6 +14,7 @@ import re
 import threading
 import time
 import queue
+import traceback
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-12345')
@@ -33,68 +34,7 @@ USERS_FILE = 'users.json'
 email_queue = queue.Queue()
 email_worker_started = False
 
-@app.route('/debug/email_queue')
-def debug_email_queue():
-    """Show current email queue status"""
-    queue_info = {
-        'queue_size': email_queue.qsize(),
-        'worker_started': email_worker_started,
-        'email_config': {
-            'MAIL_SERVER': app.config['MAIL_SERVER'],
-            'MAIL_PORT': app.config['MAIL_PORT'],
-            'MAIL_USERNAME_set': bool(app.config['MAIL_USERNAME']),
-            'MAIL_PASSWORD_set': bool(app.config['MAIL_PASSWORD']),
-            'MAIL_USE_TLS': app.config['MAIL_USE_TLS']
-        }
-    }
-    return jsonify(queue_info)
-
-# Test email route
-@app.route('/test_email/<email>')
-def test_email(email):
-    """Test email sending to a specific email"""
-    if not is_valid_email(email):
-        return jsonify({'error': 'Invalid email address'})
-    
-    test_token = "test-token-123"
-    test_username = "Test User"
-    
-    # Queue test email
-    email_queued = queue_verification_email(email, test_token, test_username)
-    
-    return jsonify({
-        'email_queued': email_queued,
-        'email': email,
-        'message': 'Test email queued for sending'
-    })
-
-# Route to manually verify users (in case email fails)
-@app.route('/manual_verify/<email>')
-def manual_verify(email):
-    """Manually verify a user's email"""
-    users_data = load_users()
-    user = users_data['users'].get(email.lower())
-    
-    if not user:
-        return jsonify({'error': 'User not found'})
-    
-    user['verified'] = True
-    if 'verification_token' in user:
-        user.pop('verification_token')
-    
-    if save_users(users_data):
-        return jsonify({
-            'success': True,
-            'message': f'User {email} manually verified',
-            'user': {
-                'username': user.get('username'),
-                'email': email,
-                'verified': user['verified']
-            }
-        })
-    else:
-        return jsonify({'error': 'Failed to save user data'})
-    
+# ========== EMAIL FUNCTIONS ==========
 
 def email_worker():
     """Background worker to process emails from queue"""
@@ -134,18 +74,121 @@ def start_email_worker():
 def _send_verification_email_sync(email, verification_token, username):
     """Synchronous email sending (called from background worker)"""
     try:
+        # Check if email is configured
         if not app.config['MAIL_USERNAME'] or not app.config['MAIL_PASSWORD']:
             print("❌ Email credentials not configured")
+            print(f"   MAIL_USERNAME: {'Set' if app.config['MAIL_USERNAME'] else 'Not set'}")
+            print(f"   MAIL_PASSWORD: {'Set' if app.config['MAIL_PASSWORD'] else 'Not set'}")
             verification_link = f"https://settle-up-app.onrender.com/verify_email/{verification_token}"
-            print(f"📧 VERIFICATION LINK: {verification_link}")
+            print(f"📧 MANUAL VERIFICATION LINK: {verification_link}")
             return False
             
-        print(f"🔧 Sending verification email to: {email}")
+        print(f"🔧 Starting email send to: {email}")
         print(f"🔧 Using SMTP: {app.config['MAIL_SERVER']}:{app.config['MAIL_PORT']}")
         print(f"🔧 From: {app.config['MAIL_USERNAME']}")
         
         verification_link = f"https://settle-up-app.onrender.com/verify_email/{verification_token}"
         subject = "Verify Your Friendz Share Account"
+        
+        # Simple HTML email (more compatible)
+        html_content = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0;">
+                    <h1>Friendz Share</h1>
+                    <p>Share Expenses. Strengthen Friendships.</p>
+                </div>
+                <div style="background: #f9f9f9; padding: 20px; border-radius: 0 0 10px 10px;">
+                    <h2>Welcome, {username}!</h2>
+                    <p>Thank you for registering with Friendz Share. To start sharing expenses with your friends, please verify your email address by clicking the button below:</p>
+                    
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="{verification_link}" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 30px; text-decoration: none; border-radius: 25px; display: inline-block;">
+                            Verify Email Address
+                        </a>
+                    </div>
+                    
+                    <p>If the button doesn't work, copy and paste this link in your browser:</p>
+                    <p style="word-break: break-all; color: #667eea; background: #f0f0f0; padding: 10px; border-radius: 5px;">
+                        {verification_link}
+                    </p>
+                    
+                    <p>This link will expire in 24 hours for security reasons.</p>
+                    
+                    <p>Happy sharing!<br>The Friendz Share Team</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        # Create message
+        msg = MIMEMultipart()
+        msg['From'] = app.config['MAIL_USERNAME']
+        msg['To'] = email
+        msg['Subject'] = subject
+        
+        # Add HTML content
+        msg.attach(MIMEText(html_content, 'html'))
+        
+        print(f"🔧 Attempting SMTP connection to {app.config['MAIL_SERVER']}:{app.config['MAIL_PORT']}...")
+        
+        # Create SMTP connection with timeout
+        server = smtplib.SMTP(app.config['MAIL_SERVER'], app.config['MAIL_PORT'], timeout=15)
+        
+        print("🔧 Starting TLS...")
+        server.starttls()
+        
+        print("🔧 Attempting login...")
+        server.login(app.config['MAIL_USERNAME'], app.config['MAIL_PASSWORD'])
+        
+        print("🔧 Sending email message...")
+        server.send_message(msg)
+        
+        print("🔧 Closing connection...")
+        server.quit()
+        
+        print(f"✅ Verification email sent successfully to {email}")
+        return True
+        
+    except smtplib.SMTPAuthenticationError as e:
+        print(f"❌ SMTP AUTHENTICATION ERROR: {e}")
+        print("💡 Common solutions:")
+        print("   1. Make sure you're using an App Password, not your regular Outlook password")
+        print("   2. Enable 2-factor authentication in your Microsoft account")
+        print("   3. Generate a new App Password specifically for this app")
+        return False
+        
+    except smtplib.SMTPConnectError as e:
+        print(f"❌ SMTP CONNECTION ERROR: {e}")
+        print("💡 Check your MAIL_SERVER and MAIL_PORT settings")
+        return False
+        
+    except smtplib.SMTPServerDisconnected as e:
+        print(f"❌ SMTP SERVER DISCONNECTED: {e}")
+        return False
+        
+    except smtplib.SMTPException as e:
+        print(f"❌ SMTP ERROR: {e}")
+        return False
+        
+    except Exception as e:
+        print(f"❌ UNEXPECTED ERROR: {str(e)}")
+        print(f"💡 Error type: {type(e).__name__}")
+        print(f"💡 Traceback: {traceback.format_exc()}")
+        return False
+
+def _send_password_reset_email_sync(email, reset_token, username):
+    """Synchronous password reset email (called from background worker)"""
+    try:
+        if not app.config['MAIL_USERNAME'] or not app.config['MAIL_PASSWORD']:
+            print("❌ Email credentials not configured for password reset")
+            return False
+            
+        reset_link = f"https://settle-up-app.onrender.com/reset_password/{reset_token}"
+        
+        subject = "Reset Your Friendz Share Password"
         
         html_content = f"""
         <!DOCTYPE html>
@@ -166,22 +209,24 @@ def _send_verification_email_sync(email, verification_token, username):
             <div class="container">
                 <div class="header">
                     <h1>Friendz Share</h1>
-                    <p>Share Expenses. Strengthen Friendships.</p>
+                    <p>Password Reset Request</p>
                 </div>
                 <div class="content">
-                    <h2>Welcome, {username}!</h2>
-                    <p>Thank you for registering with Friendz Share. To start sharing expenses with your friends, please verify your email address by clicking the button below:</p>
+                    <h2>Hello, {username}!</h2>
+                    <p>We received a request to reset your password. Click the button below to create a new password:</p>
                     
                     <div style="text-align: center; margin: 30px 0;">
-                        <a href="{verification_link}" class="button">Verify Email Address</a>
+                        <a href="{reset_link}" class="button">Reset Password</a>
                     </div>
                     
                     <p>If the button doesn't work, copy and paste this link in your browser:</p>
-                    <p style="word-break: break-all; color: #667eea;">{verification_link}</p>
+                    <p style="word-break: break-all; color: #667eea;">{reset_link}</p>
                     
-                    <p>This link will expire in 24 hours for security reasons.</p>
+                    <p>This link will expire in 1 hour for security reasons.</p>
                     
-                    <p>Happy sharing!<br>The Friendz Share Team</p>
+                    <p>If you didn't request a password reset, please ignore this email.</p>
+                    
+                    <p>Best regards,<br>The Friendz Share Team</p>
                 </div>
             </div>
         </body>
@@ -194,37 +239,19 @@ def _send_verification_email_sync(email, verification_token, username):
         msg['Subject'] = subject
         msg.attach(MIMEText(html_content, 'html'))
         
-        print(f"🔧 Attempting SMTP connection...")
-        # Use shorter timeout
         server = smtplib.SMTP(app.config['MAIL_SERVER'], app.config['MAIL_PORT'], timeout=10)
-        
-        print(f"🔧 Starting TLS...")
         server.starttls()
-        
-        print(f"🔧 Attempting login...")
         server.login(app.config['MAIL_USERNAME'], app.config['MAIL_PASSWORD'])
-        
-        print(f"🔧 Sending email...")
         server.send_message(msg)
         server.quit()
         
-        print(f"✅ Verification email sent successfully to {email}")
+        print(f"✅ Password reset email sent to {email}")
         return True
         
-    except smtplib.SMTPAuthenticationError as e:
-        print(f"❌ SMTP AUTH ERROR: Invalid credentials - {e}")
-        print(f"💡 TIP: Make sure you're using an App Password, not your regular Outlook password")
-        return False
-    except smtplib.SMTPException as e:
-        print(f"❌ SMTP ERROR: {e}")
-        return False
     except Exception as e:
-        print(f"❌ GENERAL EMAIL ERROR: {str(e)}")
-        print(f"💡 Error type: {type(e).__name__}")
-        verification_link = f"https://settle-up-app.onrender.com/verify_email/{verification_token}"
-        print(f"📧 MANUAL VERIFICATION LINK: {verification_link}")
+        print(f"❌ Password reset email error: {e}")
         return False
-    
+
 def queue_verification_email(email, verification_token, username):
     """Queue verification email for background processing"""
     try:
@@ -246,6 +273,165 @@ def queue_password_reset_email(email, reset_token, username):
     except Exception as e:
         print(f"❌ Failed to queue password reset email: {e}")
         return False
+
+# ========== DEBUG ROUTES ==========
+
+@app.route('/debug/email_queue')
+def debug_email_queue():
+    """Show current email queue status"""
+    queue_info = {
+        'queue_size': email_queue.qsize(),
+        'worker_started': email_worker_started,
+        'email_config': {
+            'MAIL_SERVER': app.config['MAIL_SERVER'],
+            'MAIL_PORT': app.config['MAIL_PORT'],
+            'MAIL_USERNAME_set': bool(app.config['MAIL_USERNAME']),
+            'MAIL_PASSWORD_set': bool(app.config['MAIL_PASSWORD']),
+            'MAIL_USE_TLS': app.config['MAIL_USE_TLS']
+        }
+    }
+    return jsonify(queue_info)
+
+@app.route('/debug/email_status')
+def debug_email_status():
+    """Check email configuration and queue status"""
+    status = {
+        'email_configured': bool(app.config['MAIL_USERNAME'] and app.config['MAIL_PASSWORD']),
+        'mail_server': app.config['MAIL_SERVER'],
+        'mail_port': app.config['MAIL_PORT'],
+        'mail_username': app.config['MAIL_USERNAME'][:3] + '***' if app.config['MAIL_USERNAME'] else 'Not set',
+        'mail_password_set': bool(app.config['MAIL_PASSWORD']),
+        'mail_use_tls': app.config['MAIL_USE_TLS'],
+        'queue_size': email_queue.qsize(),
+        'worker_started': email_worker_started,
+        'total_users': len(load_users().get('users', {})),
+        'unverified_users': sum(1 for user in load_users().get('users', {}).values() if not user.get('verified', False))
+    }
+    return jsonify(status)
+
+@app.route('/debug/env')
+def debug_env():
+    """Check environment variables (safe version)"""
+    env_vars = {
+        'MAIL_SERVER': os.environ.get('MAIL_SERVER', 'Not set'),
+        'MAIL_PORT': os.environ.get('MAIL_PORT', 'Not set'),
+        'MAIL_USERNAME_set': bool(os.environ.get('MAIL_USERNAME')),
+        'MAIL_PASSWORD_set': bool(os.environ.get('MAIL_PASSWORD')),
+        'SECRET_KEY_set': bool(os.environ.get('SECRET_KEY')),
+        'RENDER': bool(os.environ.get('RENDER')),
+        'PORT': os.environ.get('PORT', 'Not set')
+    }
+    return jsonify(env_vars)
+
+@app.route('/test_email')
+def test_email():
+    """Test email sending functionality"""
+    test_email_address = "test@example.com"  # Change this to your actual email
+    test_token = "test-verification-token-123"
+    test_username = "Test User"
+    
+    print(f"🧪 Starting email test to: {test_email_address}")
+    
+    # Test direct email sending (not queued)
+    try:
+        result = _send_verification_email_sync(test_email_address, test_token, test_username)
+        
+        if result:
+            return jsonify({
+                'success': True,
+                'message': 'Test email sent successfully!',
+                'test_email': test_email_address,
+                'verification_link': f"https://settle-up-app.onrender.com/verify_email/{test_token}"
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Failed to send test email. Check server logs for details.',
+                'test_email': test_email_address
+            })
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error during email test: {str(e)}',
+            'error_type': type(e).__name__
+        })
+
+@app.route('/manual_verify/<email>')
+def manual_verify(email):
+    """Manually verify a user's email"""
+    users_data = load_users()
+    user = users_data['users'].get(email.lower())
+    
+    if not user:
+        return jsonify({'error': 'User not found'})
+    
+    user['verified'] = True
+    if 'verification_token' in user:
+        user.pop('verification_token')
+    
+    if save_users(users_data):
+        return jsonify({
+            'success': True,
+            'message': f'User {email} manually verified',
+            'user': {
+                'username': user.get('username'),
+                'email': email,
+                'verified': user['verified']
+            }
+        })
+    else:
+        return jsonify({'error': 'Failed to save user data'})
+
+@app.route('/admin/verify_all')
+def verify_all_users():
+    """Verify all unverified users (for testing)"""
+    users_data = load_users()
+    verified_count = 0
+    
+    for email, user in users_data['users'].items():
+        if not user.get('verified', False):
+            user['verified'] = True
+            if 'verification_token' in user:
+                user.pop('verification_token')
+            verified_count += 1
+            print(f"✅ Verified user: {email}")
+    
+    if save_users(users_data):
+        return jsonify({
+            'success': True,
+            'message': f'Verified {verified_count} users',
+            'verified_count': verified_count
+        })
+    else:
+        return jsonify({
+            'success': False,
+            'message': 'Failed to save users'
+        })
+
+@app.route('/admin/users')
+def admin_users():
+    """Admin view of all users"""
+    users_data = load_users()
+    users_list = []
+    
+    for email, user in users_data.get('users', {}).items():
+        users_list.append({
+            'email': email,
+            'username': user.get('username'),
+            'verified': user.get('verified', False),
+            'created_at': user.get('created_at', 'Unknown')
+        })
+    
+    # Sort by creation date
+    users_list.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+    
+    return jsonify({
+        'total_users': len(users_list),
+        'users': users_list
+    })
+
+# ========== CORE FUNCTIONS ==========
 
 def is_valid_email(email):
     """Validate email format"""
@@ -470,6 +656,8 @@ def simplify_debts(balances):
     except Exception:
         return []
 
+# ========== APP INITIALIZATION ==========
+
 # Initialize app on startup
 def initialize_app():
     """Initialize data files and email worker"""
@@ -490,6 +678,7 @@ def health_check():
         'timestamp': datetime.now().isoformat(),
         'service': 'Friendz Share'
     })
+
 
 # Authentication Routes
 @app.route('/login', methods=['GET', 'POST'])
