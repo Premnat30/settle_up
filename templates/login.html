@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Friendz Share - Login</title>
+    <title>Friends Share - Login</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
@@ -19,19 +19,16 @@
             height: 100vh;
             margin: 0;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
         }
         
         @keyframes gradient {
             0% { background-position: 0% 50%; }
             50% { background-position: 100% 50%; }
             100% { background-position: 0% 50%; }
-        }
-        
-        .login-container {
-            height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
         }
         
         .login-card {
@@ -183,32 +180,6 @@
             color: #667eea;
         }
         
-        .flash-messages {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 1000;
-            min-width: 300px;
-        }
-        
-        .alert {
-            border-radius: 10px;
-            border: none;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-            animation: slideInRight 0.5s ease-out;
-        }
-        
-        @keyframes slideInRight {
-            from {
-                opacity: 0;
-                transform: translateX(100%);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
-        
         .feature-point {
             display: flex;
             align-items: center;
@@ -298,15 +269,65 @@
             50% { transform: translateY(-20px) rotate(180deg); }
         }
 
-        /* Fix for modal backdrop */
-        .modal-backdrop {
-            z-index: 1040;
+        /* Modal Styles */
+        .modal-content {
+            border-radius: 20px;
+            border: none;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
         }
-        .modal {
-            z-index: 1050;
+        
+        .modal-header {
+            border-bottom: 1px solid #e9ecef;
+            padding: 20px 30px;
         }
-
-        /* Loading spinner */
+        
+        .modal-body {
+            padding: 30px;
+        }
+        
+        .btn-reset {
+            background: var(--primary-gradient);
+            border: none;
+            color: white;
+            padding: 12px;
+            border-radius: 10px;
+            font-weight: 600;
+            width: 100%;
+            margin-top: 10px;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-reset:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        
+        .alert {
+            border-radius: 10px;
+            border: none;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            animation: slideInRight 0.5s ease-out;
+        }
+        
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        .flash-messages {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            min-width: 300px;
+        }
+        
         .spinner-border-sm {
             width: 1rem;
             height: 1rem;
@@ -320,153 +341,153 @@
         <div class="shape"></div>
     </div>
     
-    <!-- Flash Messages -->
-    <div class="flash-messages" id="flashMessages">
-        <!-- Flash messages will be inserted here by JavaScript -->
-    </div>
+    <!-- Flash Messages Container -->
+    <div class="flash-messages" id="flashMessages"></div>
     
-    <div class="login-container">
-        <div class="login-card">
-            <div class="brand-header">
-                <div class="brand-logo">
-                    <i class="fas fa-handshake"></i>
-                </div>
-                <div class="brand-text">Friendz Share</div>
-                <div class="brand-subtitle">Share Expenses. Strengthen Friendships.</div>
+    <div class="login-card">
+        <div class="brand-header">
+            <div class="brand-logo">
+                <i class="fas fa-handshake"></i>
             </div>
-            
-            <ul class="nav nav-tabs" id="authTabs" role="tablist">
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link active" id="login-tab" data-bs-toggle="tab" data-bs-target="#login" type="button" role="tab">Login</button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="register-tab" data-bs-toggle="tab" data-bs-target="#register" type="button" role="tab">Register</button>
-                </li>
-            </ul>
-            
-            <div class="tab-content" id="authTabsContent">
-                <!-- Login Tab -->
-                <div class="tab-pane fade show active" id="login" role="tabpanel">
-                    <form method="POST" id="loginForm">
-                        <div class="form-floating">
-                            <input type="email" class="form-control" id="loginEmail" name="email" placeholder="name@example.com" required>
-                            <label for="loginEmail"><i class="fas fa-envelope me-2"></i>Email address</label>
-                        </div>
-                        
-                        <div class="form-floating position-relative">
-                            <input type="password" class="form-control" id="loginPassword" name="password" placeholder="Password" required>
-                            <label for="loginPassword"><i class="fas fa-lock me-2"></i>Password</label>
-                            <button type="button" class="password-toggle" onclick="togglePassword('loginPassword')">
-                                <i class="fas fa-eye"></i>
-                            </button>
-                        </div>
-                        
-                        <div class="form-check mb-3">
-                            <input class="form-check-input" type="checkbox" id="rememberMe" name="remember_me">
-                            <label class="form-check-label" for="rememberMe">Remember me</label>
-                        </div>
-                        
-                        <button type="submit" class="btn btn-login" id="loginBtn">
-                            <i class="fas fa-sign-in-alt me-2"></i>Login
+            <div class="brand-text">Friends Share</div>
+            <div class="brand-subtitle">Share Expenses. Strengthen Friendships.</div>
+        </div>
+        
+        <ul class="nav nav-tabs" id="authTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="login-tab" data-bs-toggle="tab" data-bs-target="#login" type="button" role="tab">Login</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="register-tab" data-bs-toggle="tab" data-bs-target="#register" type="button" role="tab">Register</button>
+            </li>
+        </ul>
+        
+        <div class="tab-content" id="authTabsContent">
+            <!-- Login Tab -->
+            <div class="tab-pane fade show active" id="login" role="tabpanel">
+                <form id="loginForm">
+                    <div class="form-floating">
+                        <input type="email" class="form-control" id="loginEmail" name="email" placeholder="name@example.com" required>
+                        <label for="loginEmail"><i class="fas fa-envelope me-2"></i>Email address</label>
+                    </div>
+                    
+                    <div class="form-floating position-relative">
+                        <input type="password" class="form-control" id="loginPassword" name="password" placeholder="Password" required>
+                        <label for="loginPassword"><i class="fas fa-lock me-2"></i>Password</label>
+                        <button type="button" class="password-toggle" onclick="togglePassword('loginPassword')">
+                            <i class="fas fa-eye"></i>
                         </button>
-                    </form>
+                    </div>
+                    
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="rememberMe" name="remember_me">
+                        <label class="form-check-label" for="rememberMe">Remember me</label>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-login" id="loginBtn">
+                        <i class="fas fa-sign-in-alt me-2"></i>Login
+                    </button>
+                </form>
 
-                    <div class="text-center mt-3">
-                        <a href="#" data-bs-toggle="modal" data-bs-target="#forgotPasswordModal" class="text-decoration-none">Forgot your password?</a>
-                    </div>
+                <div class="text-center mt-3">
+                    <a href="#" id="forgotPasswordLink" class="text-decoration-none">Forgot your password?</a>
                 </div>
-                
-                <!-- Register Tab -->
-                <div class="tab-pane fade" id="register" role="tabpanel">
-                    <form method="POST" id="registerForm">
-                        <div class="form-floating">
-                            <input type="text" class="form-control" id="registerUsername" name="username" placeholder="Your Name" required>
-                            <label for="registerUsername"><i class="fas fa-user me-2"></i>Full Name</label>
-                        </div>
-                        
-                        <div class="form-floating">
-                            <input type="email" class="form-control" id="registerEmail" name="email" placeholder="name@example.com" required>
-                            <label for="registerEmail"><i class="fas fa-envelope me-2"></i>Email address</label>
-                        </div>
-                        
-                        <div class="form-floating position-relative">
-                            <input type="password" class="form-control" id="registerPassword" name="password" placeholder="Password" required>
-                            <label for="registerPassword"><i class="fas fa-lock me-2"></i>Password</label>
-                            <button type="button" class="password-toggle" onclick="togglePassword('registerPassword')">
-                                <i class="fas fa-eye"></i>
-                            </button>
-                        </div>
-                        
-                        <div class="form-floating position-relative">
-                            <input type="password" class="form-control" id="confirmPassword" name="confirm_password" placeholder="Confirm Password" required>
-                            <label for="confirmPassword"><i class="fas fa-lock me-2"></i>Confirm Password</label>
-                            <button type="button" class="password-toggle" onclick="togglePassword('confirmPassword')">
-                                <i class="fas fa-eye"></i>
-                            </button>
-                        </div>
-                        
-                        <button type="submit" class="btn btn-login" id="registerBtn">
-                            <i class="fas fa-user-plus me-2"></i>Create Account
+            </div>
+            
+            <!-- Register Tab -->
+            <div class="tab-pane fade" id="register" role="tabpanel">
+                <form id="registerForm">
+                    <div class="form-floating">
+                        <input type="text" class="form-control" id="registerUsername" name="username" placeholder="Your Name" required>
+                        <label for="registerUsername"><i class="fas fa-user me-2"></i>Full Name</label>
+                    </div>
+                    
+                    <div class="form-floating">
+                        <input type="email" class="form-control" id="registerEmail" name="email" placeholder="name@example.com" required>
+                        <label for="registerEmail"><i class="fas fa-envelope me-2"></i>Email address</label>
+                    </div>
+                    
+                    <div class="form-floating position-relative">
+                        <input type="password" class="form-control" id="registerPassword" name="password" placeholder="Password" required>
+                        <label for="registerPassword"><i class="fas fa-lock me-2"></i>Password</label>
+                        <button type="button" class="password-toggle" onclick="togglePassword('registerPassword')">
+                            <i class="fas fa-eye"></i>
                         </button>
-                    </form>
+                    </div>
+                    
+                    <div class="form-floating position-relative">
+                        <input type="password" class="form-control" id="confirmPassword" name="confirm_password" placeholder="Confirm Password" required>
+                        <label for="confirmPassword"><i class="fas fa-lock me-2"></i>Confirm Password</label>
+                        <button type="button" class="password-toggle" onclick="togglePassword('confirmPassword')">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-login" id="registerBtn">
+                        <i class="fas fa-user-plus me-2"></i>Create Account
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Forgot Password Modal -->
+        <div class="modal fade" id="forgotPasswordModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Reset Password</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="mb-3">Enter your email address and we'll send you instructions to reset your password.</p>
+                        
+                        <div id="resetAlertContainer"></div>
+                        
+                        <form id="resetForm">
+                            <div class="form-floating mb-3">
+                                <input type="email" class="form-control" id="resetEmail" placeholder="name@example.com" required>
+                                <label for="resetEmail">Email address</label>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-reset" id="resetBtn">
+                                <i class="fas fa-paper-plane me-2"></i>Send Reset Instructions
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-4">
+            <h6 class="text-center mb-3">Why Join Friends Share?</h6>
+            
+            <div class="feature-point">
+                <div class="feature-icon">
+                    <i class="fas fa-users"></i>
+                </div>
+                <div>
+                    <strong>Create Friend Groups</strong>
+                    <small class="d-block text-muted">Organize expenses by friend coins</small>
                 </div>
             </div>
             
-            <!-- Forgot Password Modal -->
-            <div class="modal fade" id="forgotPasswordModal" tabindex="-1" aria-hidden="true">
-                <div class="modal-dialog">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">Reset Password</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                        </div>
-                        <div class="modal-body">
-                            <p class="mb-3">Enter your email address and we'll send you instructions to reset your password.</p>
-                            <form id="forgotPasswordForm">
-                                <div class="form-floating mb-3">
-                                    <input type="email" class="form-control" id="forgotEmail" name="email" placeholder="name@example.com" required>
-                                    <label for="forgotEmail">Enter your email address</label>
-                                </div>
-                                <button type="submit" class="btn btn-primary w-100" id="forgotPasswordBtn">
-                                    Send Reset Instructions
-                                </button>
-                            </form>
-                        </div>
-                    </div>
+            <div class="feature-point">
+                <div class="feature-icon">
+                    <i class="fas fa-receipt"></i>
+                </div>
+                <div>
+                    <strong>Share Expenses</strong>
+                    <small class="d-block text-muted">Split bills fairly and transparently</small>
                 </div>
             </div>
             
-            <div class="mt-4">
-                <h6 class="text-center mb-3">Why Join Friendz Share?</h6>
-                
-                <div class="feature-point">
-                    <div class="feature-icon">
-                        <i class="fas fa-users"></i>
-                    </div>
-                    <div>
-                        <strong>Create Friend Groups</strong>
-                        <small class="d-block text-muted">Organize expenses by friend circles</small>
-                    </div>
+            <div class="feature-point">
+                <div class="feature-icon">
+                    <i class="fas fa-share-alt"></i>
                 </div>
-                
-                <div class="feature-point">
-                    <div class="feature-icon">
-                        <i class="fas fa-receipt"></i>
-                    </div>
-                    <div>
-                        <strong>Share Expenses</strong>
-                        <small class="d-block text-muted">Split bills fairly and transparently</small>
-                    </div>
-                </div>
-                
-                <div class="feature-point">
-                    <div class="feature-icon">
-                        <i class="fas fa-share-alt"></i>
-                    </div>
-                    <div>
-                        <strong>Invite Friends</strong>
-                        <small class="d-block text-muted">Share groups via WhatsApp or email</small>
-                    </div>
+                <div>
+                    <strong>Invite Friends</strong>
+                    <small class="d-block text-muted">Share groups via WhatsApp or email</small>
                 </div>
             </div>
         </div>
@@ -535,6 +556,15 @@
 
         // DOM ready
         document.addEventListener('DOMContentLoaded', function() {
+            // Initialize modal
+            const forgotPasswordModal = new bootstrap.Modal(document.getElementById('forgotPasswordModal'));
+            
+            // Forgot password link handler
+            document.getElementById('forgotPasswordLink').addEventListener('click', function(e) {
+                e.preventDefault();
+                forgotPasswordModal.show();
+            });
+            
             // Login form handler
             const loginForm = document.getElementById('loginForm');
             const loginBtn = document.getElementById('loginBtn');
@@ -600,7 +630,7 @@
                 setTimeout(() => {
                     // This is where you would make your actual API call
                     // For demo purposes, we'll just show a success message
-                    showFlashMessage('Registration successful! Welcome to Friendz Share.', 'success');
+                    showFlashMessage('Registration successful! Welcome to Friends Share.', 'success');
                     
                     // Reset button after success
                     setTimeout(() => {
@@ -615,40 +645,56 @@
             });
             
             // Forgot password form handler
-            const forgotPasswordForm = document.getElementById('forgotPasswordForm');
-            const forgotPasswordBtn = document.getElementById('forgotPasswordBtn');
-            const forgotPasswordModal = new bootstrap.Modal(document.getElementById('forgotPasswordModal'));
+            const resetForm = document.getElementById('resetForm');
+            const resetBtn = document.getElementById('resetBtn');
+            const resetAlertContainer = document.getElementById('resetAlertContainer');
             
-            forgotPasswordForm.addEventListener('submit', function(e) {
+            resetForm.addEventListener('submit', function(e) {
                 e.preventDefault();
                 
-                const email = document.getElementById('forgotEmail').value;
+                const email = document.getElementById('resetEmail').value;
                 
                 if (!validateEmail(email)) {
-                    showFlashMessage('Please enter a valid email address.', 'danger');
+                    resetAlertContainer.innerHTML = `
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            Please enter a valid email address.
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    `;
                     return;
                 }
                 
-                setLoading(forgotPasswordBtn);
+                setLoading(resetBtn);
                 
                 // Simulate API call - replace with actual password reset request
                 setTimeout(() => {
                     // This is where you would make your actual API call
                     // For demo purposes, we'll just show a success message
-                    showFlashMessage('Password reset instructions have been sent to your email!', 'success');
+                    resetAlertContainer.innerHTML = `
+                        <div class="alert alert-success alert-dismissible fade show" role="alert">
+                            Password reset instructions have been sent to your email!
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    `;
                     
-                    // Reset button and close modal
+                    // Reset button and clear form
                     setTimeout(() => {
-                        resetButton(forgotPasswordBtn, 'Send Reset Instructions');
-                        forgotPasswordModal.hide();
-                        forgotPasswordForm.reset();
+                        resetButton(resetBtn, '<i class="fas fa-paper-plane me-2"></i>Send Reset Instructions');
+                        resetForm.reset();
+                        
+                        // Close modal after 3 seconds
+                        setTimeout(() => {
+                            forgotPasswordModal.hide();
+                        }, 3000);
                     }, 2000);
                 }, 1500);
             });
             
             // Reset button states when modal is closed
             document.getElementById('forgotPasswordModal').addEventListener('hidden.bs.modal', function() {
-                resetButton(forgotPasswordBtn, 'Send Reset Instructions');
+                resetButton(resetBtn, '<i class="fas fa-paper-plane me-2"></i>Send Reset Instructions');
+                resetForm.reset();
+                resetAlertContainer.innerHTML = '';
             });
         });
     </script>
